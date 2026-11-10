@@ -112,7 +112,14 @@ docker compose down -v   # derruba tudo e apaga os volumes
 
 Respostas em JSON com campos em `snake_case`. Erros vêm com um corpo `{"error": "mensagem"}`.
 
-Não há login: cada requisição identifica o usuário por um `user_id` (UUID). A forma de enviar esse valor (provavelmente o cabeçalho `X-User-ID`) ainda está em definição.
+### Identificação do usuário
+Não há login. Toda requisição (exceto `/healthz`) precisa do cabeçalho **`X-User-ID`** com um UUID, e os serviços só devolvem e alteram os dados desse usuário. Se o cabeçalho faltar ou não for um UUID válido, a resposta é **400**. O `user_id` nunca vai no corpo.
+
+```bash
+curl -H "X-User-ID: 11111111-1111-1111-1111-111111111111" http://localhost:8080/books
+```
+
+> ⚠️ **Isto não é autenticação.** A identidade é simulada: qualquer cliente pode enviar qualquer UUID. Em produção, ela viria de um token validado no gateway; como a leitura fica isolada num middleware, só ele mudaria.
 
 **books-service**
 | Método e rota | O que faz |

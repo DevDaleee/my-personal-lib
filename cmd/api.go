@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	repo "my-personal-lib/internal/adapters/postgresql/sqlc"
+	"my-personal-lib/internal/books"
+	"my-personal-lib/internal/userctx"
 	"net/http"
 	"time"
 
@@ -22,6 +25,13 @@ func (app *application) mount() http.Handler {
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("All good"))
+	})
+
+	bookService := books.NewSerice(repo.New(app.db), app.db)
+	bookHandler := books.NewHandler(bookService)
+	r.Route("/books", func(r chi.Router) {
+		r.Use(userctx.Middleware)
+		r.Post("/", bookHandler.CreateBook)
 	})
 
 	return r
