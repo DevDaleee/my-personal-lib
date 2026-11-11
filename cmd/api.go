@@ -32,6 +32,7 @@ func (app *application) mount() http.Handler {
 	r.Route("/books", func(r chi.Router) {
 		r.Use(userctx.Middleware)
 		r.Post("/", bookHandler.CreateBook)
+		r.Get("/{id}", bookHandler.GetBook)
 	})
 
 	return r

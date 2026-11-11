@@ -14,4 +14,8 @@ var (
 	ErrMissingFields       = errors.New("Campos inválidos")
 	ErrHeaderField         = errors.New("O cabeçalho X-User-ID é obrigatório")
 	ErrValidHeaderField    = errors.New("O cabeçalho X-User-ID deve ser um UUID válido")
+	ErrValidBook           = errors.New("Id do Livro Inválido")
+	ErrPostgressNoRows     = errors.New("Não encontrado")
+	ErrInvalidJSON         = errors.New("Json qubrado ou campos desconhecidos")
+	ErrDecode              = errors.New("request body must contain a single JSON object")
 )

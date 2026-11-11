@@ -4,6 +4,7 @@ import (
 	"context"
 	repo "my-personal-lib/internal/adapters/postgresql/sqlc"
 	messages "my-personal-lib/internal/error"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,6 +12,7 @@ import (
 
 type BooksServices interface {
 	CreateBook(ctx context.Context, userID pgtype.UUID, bookItems bookItems) (repo.Book, error)
+	GetBook(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error)
 }
 
 type svc struct {
@@ -22,10 +24,33 @@ func NewSerice(repo *repo.Queries, db *pgxpool.Pool) BooksServices {
 	return &svc{repo: repo, db: db}
 }
 
+func (s *svc) GetBook(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error) {
+	if !userID.Valid {
+		return repo.Book{}, messages.ErrValidUser
+	}
+	if !bookID.Valid {
+		return repo.Book{}, messages.ErrValidBook
+	}
+
+	book, err := s.repo.GetBook(ctx, repo.GetBookParams{
+		ID:     bookID,
+		UserID: userID,
+	})
+	if err != nil {
+		return repo.Book{}, err
+	}
+
+	return book, nil
+}
+
 func (s *svc) CreateBook(ctx context.Context, userID pgtype.UUID, bookData bookItems) (repo.Book, error) {
 	if !userID.Valid {
 		return repo.Book{}, messages.ErrValidUser
 	}
+
+	bookData.Author = strings.TrimSpace(bookData.Author)
+	bookData.Title = strings.TrimSpace(bookData.Title)
+
 	if bookData.Author == "" {
 		return repo.Book{}, messages.ErrEmptyAuthor
 	}

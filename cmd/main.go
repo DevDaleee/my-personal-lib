@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"my-personal-lib/internal/env"
 	"os"
@@ -32,7 +31,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	fmt.Println("Connected to database", "dsn", cfg.db.dsn)
+	slog.Info("Connected to database")
 
 	api := application{
 		config: cfg,

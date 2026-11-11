@@ -9,7 +9,10 @@ import (
 	"my-personal-lib/internal/userctx"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type BookHandler struct {
@@ -20,6 +23,35 @@ func NewHandler(service BooksServices) *BookHandler {
 	return &BookHandler{
 		service: service,
 	}
+}
+
+func (h *BookHandler) GetBook(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userctx.FromContext(r.Context())
+	if !ok {
+		slog.Error(messages.ErrValidUser.Error())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	var bookID pgtype.UUID
+	tempBookID := chi.URLParam(r, "id")
+
+	if err := bookID.Scan(tempBookID); err != nil {
+		json.WriteError(w, http.StatusBadRequest, messages.ErrValidBook.Error())
+		return
+	}
+
+	book, err := h.service.GetBook(r.Context(), userID, bookID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("Book not found")
+			json.WriteError(w, http.StatusNotFound, messages.ErrPostgressNoRows.Error())
+			return
+		}
+		slog.Error("Get book failed", "error", err.Error(), "book_id", bookID.String())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	json.Write(w, http.StatusOK, book)
 }
 
 func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {

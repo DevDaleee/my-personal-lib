@@ -2,6 +2,7 @@ package json
 
 import (
 	"encoding/json"
+	messages "my-personal-lib/internal/error"
 	"net/http"
 )
 
@@ -22,6 +23,12 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 func Read(r *http.Request, data any) error {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-
-	return decoder.Decode(data)
+	err := decoder.Decode(data)
+	if err != nil {
+		return messages.ErrInvalidJSON
+	}
+	if decoder.More() {
+		return messages.ErrDecode
+	}
+	return nil
 }
