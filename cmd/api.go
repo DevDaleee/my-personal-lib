@@ -4,6 +4,8 @@ import (
 	"log"
 	repo "my-personal-lib/internal/adapters/postgresql/sqlc"
 	"my-personal-lib/internal/books"
+	messages "my-personal-lib/internal/error"
+	"my-personal-lib/internal/json"
 	"my-personal-lib/internal/userctx"
 	"net/http"
 	"time"
@@ -22,6 +24,13 @@ func (app *application) mount() http.Handler {
 	r.Use(middleware.Recoverer)
 
 	r.Use(middleware.Timeout((60 * time.Second)))
+
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		json.WriteError(w, http.StatusNotFound, messages.ErrNotFound.Error())
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		json.WriteError(w, http.StatusMethodNotAllowed, messages.ErrMethodNotAllowed.Error())
+	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("All good"))

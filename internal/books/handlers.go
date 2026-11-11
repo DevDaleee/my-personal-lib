@@ -28,7 +28,7 @@ func NewHandler(service BooksServices) *BookHandler {
 func (h *BookHandler) GetBook(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
-		slog.Error(messages.ErrValidUser.Error())
+		slog.Error("Invalid user", "user_id", userID.String())
 		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
 		return
 	}
