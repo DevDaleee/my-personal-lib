@@ -3,6 +3,7 @@ package books
 import (
 	"errors"
 	"log/slog"
+	"strings"
 
 	messages "my-personal-lib/internal/error"
 	"my-personal-lib/internal/json"
@@ -25,7 +26,34 @@ func NewHandler(service BooksServices) *BookHandler {
 	}
 }
 
-func (h *BookHandler) GetBook(w http.ResponseWriter, r *http.Request) {
+func (h *BookHandler) GetBookByStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userctx.FromContext(r.Context())
+	if !ok {
+		slog.Error("Invalid user", "user_id", userID.String())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	var status pgtype.Text
+	tempStatus := r.URL.Query().Get("status")
+	tempStatus = strings.TrimSpace(tempStatus)
+	if tempStatus != "" {
+		status.Scan(tempStatus)
+	}
+
+	book, err := h.service.GetBookByStatus(r.Context(), userID, status)
+	if err != nil {
+		if errors.Is(err, messages.ErrInvalidStatus) {
+			json.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		slog.Error("Get book by status failed", "error", err.Error(), "status", status.String)
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	json.Write(w, http.StatusOK, book)
+}
+
+func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
 		slog.Error("Invalid user", "user_id", userID.String())
@@ -40,7 +68,7 @@ func (h *BookHandler) GetBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	book, err := h.service.GetBook(r.Context(), userID, bookID)
+	book, err := h.service.GetBookByID(r.Context(), userID, bookID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			slog.Info("Book not found")

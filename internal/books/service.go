@@ -12,7 +12,8 @@ import (
 
 type BooksServices interface {
 	CreateBook(ctx context.Context, userID pgtype.UUID, bookItems bookItems) (repo.Book, error)
-	GetBook(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error)
+	GetBookByID(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error)
+	GetBookByStatus(ctx context.Context, userID pgtype.UUID, status pgtype.Text) ([]repo.Book, error)
 }
 
 type svc struct {
@@ -24,7 +25,25 @@ func NewSerice(repo *repo.Queries, db *pgxpool.Pool) BooksServices {
 	return &svc{repo: repo, db: db}
 }
 
-func (s *svc) GetBook(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error) {
+func (s *svc) GetBookByStatus(ctx context.Context, userID pgtype.UUID, status pgtype.Text) ([]repo.Book, error) {
+	if !userID.Valid {
+		return []repo.Book{}, messages.ErrValidUser
+	}
+	status.String = strings.TrimSpace(status.String)
+	if status.Valid && !(status.String == "reading" || status.String == "wanna_read" || status.String == "read") {
+		return []repo.Book{}, messages.ErrInvalidStatus
+	}
+	book, err := s.repo.ListBooks(ctx, repo.ListBooksParams{
+		UserID: userID,
+		Status: status,
+	})
+	if err != nil {
+		return []repo.Book{}, err
+	}
+	return book, nil
+}
+
+func (s *svc) GetBookByID(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error) {
 	if !userID.Valid {
 		return repo.Book{}, messages.ErrValidUser
 	}

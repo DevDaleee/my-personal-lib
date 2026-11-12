@@ -216,7 +216,7 @@ func (q *Queries) ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, e
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Book
+	items := []Book{}
 	for rows.Next() {
 		var i Book
 		if err := rows.Scan(
@@ -265,7 +265,7 @@ func (q *Queries) ListProgressUpdates(ctx context.Context, arg ListProgressUpdat
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ProgressUpdate
+	items := []ProgressUpdate{}
 	for rows.Next() {
 		var i ProgressUpdate
 		if err := rows.Scan(
