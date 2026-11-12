@@ -29,7 +29,7 @@ func NewHandler(service BooksServices) *BookHandler {
 func (h *BookHandler) GetBookByStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
-		slog.Error("Invalid user", "user_id", userID.String())
+		slog.Error("Invalid User", "Error:", messages.ErrValidUser.Error(), "user_id", userID.String())
 		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
 		return
 	}
@@ -56,7 +56,7 @@ func (h *BookHandler) GetBookByStatus(w http.ResponseWriter, r *http.Request) {
 func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
-		slog.Error("Invalid user", "user_id", userID.String())
+		slog.Error("Invalid User", "Error:", messages.ErrValidUser.Error(), "user_id", userID.String())
 		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
 		return
 	}
@@ -91,7 +91,7 @@ func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
-		slog.Error(messages.ErrValidUser.Error())
+		slog.Error("Invalid User", "Error:", messages.ErrValidUser.Error(), "user_id", userID.String())
 		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
 		return
 	}
