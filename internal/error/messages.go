@@ -21,4 +21,5 @@ var (
 	ErrNotFound            = errors.New("Não encontrado")
 	ErrMethodNotAllowed    = errors.New("Método não permitido")
 	ErrInvalidStatus       = errors.New("Status inválido: use wanna_read, reading ou read")
+	ErrInvalidPage         = errors.New("A página atual deve estar entre 0 e o total de páginas")
 )

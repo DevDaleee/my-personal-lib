@@ -43,6 +43,7 @@ func (app *application) mount() http.Handler {
 		r.Post("/", bookHandler.CreateBook)
 		r.Get("/{id}", bookHandler.GetBookByID)
 		r.Get("/", bookHandler.GetBookByStatus)
+		r.Patch("/{id}/progress", bookHandler.UpdateBookProgress)
 	})
 
 	return r

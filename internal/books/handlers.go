@@ -26,6 +26,47 @@ func NewHandler(service BooksServices) *BookHandler {
 	}
 }
 
+func (h *BookHandler) UpdateBookProgress(w http.ResponseWriter, r *http.Request) {
+	var tempBook updateBookItem
+	if err := json.Read(r, &tempBook); err != nil {
+		json.WriteError(w, http.StatusBadRequest, messages.ErrMissingFields.Error())
+		return
+	}
+
+	userID, ok := userctx.FromContext(r.Context())
+	if !ok {
+		slog.Error("Invalid User", "Error:", messages.ErrValidUser.Error(), "user_id", userID.String())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+
+	var bookID pgtype.UUID
+	tempBookID := chi.URLParam(r, "id")
+
+	if err := bookID.Scan(tempBookID); err != nil {
+		json.WriteError(w, http.StatusBadRequest, messages.ErrValidBook.Error())
+		return
+	}
+
+	book, err := h.service.UpdateBookProgress(r.Context(), userID, bookID, tempBook)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			slog.Info("Book not found")
+			json.WriteError(w, http.StatusNotFound, messages.ErrPostgressNoRows.Error())
+			return
+		}
+		if errors.Is(err, messages.ErrInvalidPage) {
+			slog.Info("Pagina inexistente")
+			json.WriteError(w, http.StatusBadRequest, messages.ErrInvalidPage.Error())
+			return
+		}
+		slog.Error("Update book status failed", "error", err.Error(), "book_id", bookID, "user_id", userID)
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	json.Write(w, http.StatusOK, book)
+}
+
 func (h *BookHandler) GetBookByStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {

@@ -14,6 +14,7 @@ type BooksServices interface {
 	CreateBook(ctx context.Context, userID pgtype.UUID, bookItems bookItems) (repo.Book, error)
 	GetBookByID(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID) (repo.Book, error)
 	GetBookByStatus(ctx context.Context, userID pgtype.UUID, status pgtype.Text) ([]repo.Book, error)
+	UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID, bookItems updateBookItem) (repo.Book, error)
 }
 
 type svc struct {
@@ -23,6 +24,72 @@ type svc struct {
 
 func NewSerice(repo *repo.Queries, db *pgxpool.Pool) BooksServices {
 	return &svc{repo: repo, db: db}
+}
+
+func (s *svc) UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID, bookItems updateBookItem) (repo.Book, error) {
+	if !userID.Valid {
+		return repo.Book{}, messages.ErrValidUser
+	}
+	if !bookID.Valid {
+		return repo.Book{}, messages.ErrValidBook
+	}
+
+	if bookItems.CurrentPage < 0 {
+		return repo.Book{}, messages.ErrInvalidPage
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return repo.Book{}, err
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.repo.WithTx(tx)
+
+	book, err := qtx.GetBookForUpdate(ctx, repo.GetBookForUpdateParams{
+		UserID: userID,
+		ID:     bookID,
+	})
+	if err != nil {
+		return repo.Book{}, err
+	}
+
+	if bookItems.CurrentPage > book.TotalPages {
+		return repo.Book{}, messages.ErrInvalidPage
+	}
+
+	bookStatus := "reading"
+
+	if bookItems.CurrentPage == 0 {
+		bookStatus = "wanna_read"
+	}
+	if bookItems.CurrentPage == book.TotalPages {
+		bookStatus = "read"
+	}
+
+	_, err = qtx.CreateProgressUpdate(ctx, repo.CreateProgressUpdateParams{
+		BookID:       bookID,
+		PreviousPage: book.CurrentPage,
+		Status:       bookStatus,
+		CurrentPage:  bookItems.CurrentPage,
+	})
+	if err != nil {
+		return repo.Book{}, err
+	}
+
+	updateBook, err := qtx.UpdateProgress(ctx, repo.UpdateProgressParams{
+		UserID:      userID,
+		ID:          bookID,
+		Status:      bookStatus,
+		CurrentPage: bookItems.CurrentPage,
+	})
+
+	if err != nil {
+		return repo.Book{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return repo.Book{}, err
+	}
+	return updateBook, nil
 }
 
 func (s *svc) GetBookByStatus(ctx context.Context, userID pgtype.UUID, status pgtype.Text) ([]repo.Book, error) {

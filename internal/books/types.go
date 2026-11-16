@@ -12,3 +12,7 @@ type bookItems struct {
 	CoverUrl   pgtype.Text `json:"cover_url"`
 	Owned      bool        `json:"owned"`
 }
+
+type updateBookItem struct {
+	CurrentPage int32 `json:"current_page"`
+}
