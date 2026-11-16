@@ -5,31 +5,43 @@ import (
 	"log/slog"
 	"my-personal-lib/internal/env"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
 	ctx := context.Background()
 	_ = godotenv.Load()
+	dsn, err := env.GetRequired("GOOSE_DBSTRING")
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	cfg := config{
-
 		addr: env.GetString("PORT", ":9090"),
 		db: dbConfig{
-			dsn: env.GetString("GOOSE_DBSTRING", "host=localhost user=postgres password=postgres dbname=mypersonalbib sslmode=disable"),
+			dsn: dsn,
 		},
 	}
 
 	conn, err := pgxpool.New(ctx, cfg.db.dsn)
 	if err != nil {
-		panic(err)
+		slog.Error("cannot create databse pool", "error", err)
+		os.Exit(1)
 	}
 	defer conn.Close()
-
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err = conn.Ping(pingCtx)
+	cancel()
+	if err != nil {
+		slog.Error("cannot connect to database", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("Connected to database")
 
