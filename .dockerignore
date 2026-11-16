@@ -1,0 +1,16 @@
+.git
+.gitignore
+**/.DS_Store
+.claude
+CLAUDE.md
+.env
+README.md
+*.drawio
+*.pptx
+Dockerfile
+.dockerignore
+docker-compose.yaml
+
+# Outras partes do projeto (app Flutter e build web)
+app
+build

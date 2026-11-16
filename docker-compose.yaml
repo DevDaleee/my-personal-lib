@@ -10,6 +10,44 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Diz ao Compose quando o banco está pronto para receber conexões.
+    # O $$ faz o Compose passar o $ adiante, para o shell do container ler a variável.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Roda "goose up" uma vez e termina. O books só sobe se ele terminar com sucesso.
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      GOOSE_DRIVER: postgres
+      # Dentro da rede do Compose, o host do banco é o nome do serviço (postgres).
+      GOOSE_DBSTRING: host=postgres user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  books:
+    build: .
+    ports:
+      - "9090:9090"
+    env_file: .env
+    environment:
+      # Sobrescreve o DSN do .env: dentro da rede do Compose, o host do banco
+      # é o nome do serviço (postgres), e não localhost.
+      GOOSE_DBSTRING: host=postgres user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} sslmode=disable
+    depends_on:
+      postgres:
+        # Só sobe o books depois que o healthcheck do postgres passar...
+        condition: service_healthy
+      migrate:
+        # ...e depois que as migrations terminarem sem erro.
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
