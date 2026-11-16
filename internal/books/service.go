@@ -57,14 +57,7 @@ func (s *svc) UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID
 		return repo.Book{}, messages.ErrInvalidPage
 	}
 
-	bookStatus := "reading"
-
-	if bookItems.CurrentPage == 0 {
-		bookStatus = "wanna_read"
-	}
-	if bookItems.CurrentPage == book.TotalPages {
-		bookStatus = "read"
-	}
+	bookStatus := statusForPage(bookItems.CurrentPage, book.TotalPages)
 
 	_, err = qtx.CreateProgressUpdate(ctx, repo.CreateProgressUpdateParams{
 		BookID:       bookID,
@@ -97,7 +90,7 @@ func (s *svc) GetBookByStatus(ctx context.Context, userID pgtype.UUID, status pg
 		return []repo.Book{}, messages.ErrValidUser
 	}
 	status.String = strings.TrimSpace(status.String)
-	if status.Valid && !(status.String == "reading" || status.String == "wanna_read" || status.String == "read") {
+	if status.Valid && !(status.String == reading || status.String == wanna_read || status.String == read) {
 		return []repo.Book{}, messages.ErrInvalidStatus
 	}
 	book, err := s.repo.ListBooks(ctx, repo.ListBooksParams{
