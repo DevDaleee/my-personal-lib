@@ -2,12 +2,25 @@ version: "2"
 sql:
   - engine: "postgresql"
     queries:
-      - "./internal/adapters/postgresql/sqlc/queries.sql"
-    schema: "./internal/adapters/postgresql/migrations"
+      - "./internal/adapters/postgresql/books/sqlc/queries.sql"
+    schema: "./internal/adapters/postgresql/books/migrations"
     gen:
       go:
         package: "repo"
-        out: "./internal/adapters/postgresql/sqlc"
+        out: "./internal/adapters/postgresql/books/sqlc"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_interface: true # generate Querier interface
+        emit_empty_slices: true # return empty slices
+
+  - engine: "postgresql"
+    queries:
+      - "./internal/adapters/postgresql/stats/sqlc/queries.sql"
+    schema: "./internal/adapters/postgresql/stats/migrations"
+    gen:
+      go:
+        package: "statsrepo"
+        out: "./internal/adapters/postgresql/stats/sqlc"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_interface: true # generate Querier interface

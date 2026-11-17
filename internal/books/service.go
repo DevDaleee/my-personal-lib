@@ -2,7 +2,7 @@ package books
 
 import (
 	"context"
-	repo "my-personal-lib/internal/adapters/postgresql/sqlc"
+	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
 	messages "my-personal-lib/internal/error"
 	"strings"
 

@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	repo "my-personal-lib/internal/adapters/postgresql/sqlc"
+	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
 	"my-personal-lib/internal/books"
 	messages "my-personal-lib/internal/error"
 	"my-personal-lib/internal/json"

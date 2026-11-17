@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	repo "my-personal-lib/internal/adapters/postgresql/sqlc"
+	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
 	messages "my-personal-lib/internal/error"
 	"my-personal-lib/internal/userctx"
 )
