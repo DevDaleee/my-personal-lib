@@ -20,7 +20,8 @@ FROM alpine:3.22 AS migrate
 RUN adduser -D -H app
 COPY --from=goose-builder /go/bin/goose /usr/local/bin/goose
 # --chown: os .sql vêm com permissão só para o dono; sem isto o usuário app não consegue lê-los.
-COPY --chown=app:app internal/adapters/postgresql/books/migrations /migrations
+COPY --chown=app:app internal/adapters/postgresql/books/migrations /migrations/books
+COPY --chown=app:app internal/adapters/postgresql/stats/migrations /migrations/stats
 USER app
 # O goose lê GOOSE_DRIVER, GOOSE_DBSTRING e GOOSE_MIGRATION_DIR do ambiente.
 CMD ["goose", "up"]

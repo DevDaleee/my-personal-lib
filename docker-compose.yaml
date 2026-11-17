@@ -1,15 +1,47 @@
 services:
-  postgres:
+  books-postgres:
     image: postgres:16-alpine
     container_name: mpbpostgress
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${BOOKS_DB_USER}
+      POSTGRES_PASSWORD: ${BOOKS_DB_PASS}
+      POSTGRES_DB: ${BOOKS_DB_NAME}
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - books-postgres-data:/var/lib/postgresql/data
+    # Diz ao Compose quando o banco está pronto para receber conexões.
+    # O $$ faz o Compose passar o $ adiante, para o shell do container ler a variável.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+     # Roda "goose up" uma vez e termina. O books só sobe se ele terminar com sucesso.
+  migrate-books:
+    build:
+      context: .
+      target: migrate
+    environment:
+      GOOSE_DRIVER: postgres
+      # Dentro da rede do Compose, o host do banco é o nome do serviço (postgres).
+      GOOSE_DBSTRING: host=books-postgres user=${BOOKS_DB_USER} password=${BOOKS_DB_PASS} dbname=${BOOKS_DB_NAME} sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations/books
+    depends_on:
+      books-postgres:
+        condition: service_healthy
+
+  stats-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${STATS_DB_USER}
+      POSTGRES_PASSWORD: ${STATS_DB_PASS}
+      POSTGRES_DB: ${STATS_DB_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - stats-postgres-data:/var/lib/postgresql/data
     # Diz ao Compose quando o banco está pronto para receber conexões.
     # O $$ faz o Compose passar o $ adiante, para o shell do container ler a variável.
     healthcheck:
@@ -19,17 +51,17 @@ services:
       retries: 15
 
   # Roda "goose up" uma vez e termina. O books só sobe se ele terminar com sucesso.
-  migrate:
+  migrate-stats:
     build:
       context: .
       target: migrate
     environment:
       GOOSE_DRIVER: postgres
       # Dentro da rede do Compose, o host do banco é o nome do serviço (postgres).
-      GOOSE_DBSTRING: host=postgres user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} sslmode=disable
-      GOOSE_MIGRATION_DIR: /migrations
+      GOOSE_DBSTRING: host=stats-postgres user=${STATS_DB_USER} password=${STATS_DB_PASS} dbname=${STATS_DB_NAME} sslmode=disable
+      GOOSE_MIGRATION_DIR: /migrations/stats
     depends_on:
-      postgres:
+      stats-postgres:
         condition: service_healthy
 
   books:
@@ -40,12 +72,12 @@ services:
     environment:
       # Sobrescreve o DSN do .env: dentro da rede do Compose, o host do banco
       # é o nome do serviço (postgres), e não localhost.
-      GOOSE_DBSTRING: host=postgres user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} sslmode=disable
+      GOOSE_DBSTRING: host=books-postgres user=${BOOKS_DB_USER} password=${BOOKS_DB_PASS} dbname=${BOOKS_DB_NAME} sslmode=disable
     depends_on:
-      postgres:
+      books-postgres:
         # Só sobe o books depois que o healthcheck do postgres passar...
         condition: service_healthy
-      migrate:
+      migrate-books:
         # ...e depois que as migrations terminarem sem erro.
         condition: service_completed_successfully
 
@@ -61,4 +93,5 @@ services:
       - books
 
 volumes:
-  postgres-data:
+  books-postgres-data:
+  stats-postgres-data:
