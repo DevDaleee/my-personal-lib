@@ -14,8 +14,10 @@ import (
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
+
 	ctx := context.Background()
 	_ = godotenv.Load()
+
 	dsn, err := env.GetRequired("GOOSE_DBSTRING")
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
