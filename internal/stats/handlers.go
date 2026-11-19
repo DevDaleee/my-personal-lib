@@ -21,6 +21,37 @@ func NewHandler(service StatsServices) *StatsHandler {
 	}
 }
 
+func (h *StatsHandler) GetStatsMonthly(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userctx.FromContext(r.Context())
+	if !ok {
+		slog.Error("Invalid User", "Error:", messages.ErrValidUser.Error(), "user_id", userID.String())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+
+	raw := strings.TrimSpace(r.URL.Query().Get("months"))
+	months := 12
+	if raw != "" {
+		month, err := strconv.Atoi(raw)
+		if err != nil {
+			json.WriteError(w, http.StatusBadRequest, messages.ErrInvalidMonthly.Error())
+			return
+		}
+		months = month
+	}
+	listBook, err := h.service.GetStatsMonthly(r.Context(), userID, months)
+	if err != nil {
+		if errors.Is(err, messages.ErrInvalidMonthly) {
+			json.WriteError(w, http.StatusBadRequest, messages.ErrInvalidMonthly.Error())
+			return
+		}
+		slog.Error("Get status monthly failed", "error", err.Error(), "months", months)
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	json.Write(w, http.StatusOK, listBook)
+}
+
 func (h *StatsHandler) GetStatsDaily(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {

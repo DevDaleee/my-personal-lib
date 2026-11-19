@@ -51,3 +51,43 @@ func TestGetStatsDailyRejectsBeforeQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestGetStatsMonthlyRejectsBeforeQuery(t *testing.T) {
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatalf("não carregou o fuso: %v", err)
+	}
+	s := NewService(nil, nil, loc)
+
+	var validUser pgtype.UUID
+	if err := validUser.Scan("11111111-1111-1111-1111-111111111111"); err != nil {
+		t.Fatalf("UUID de teste inválido: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		userID  pgtype.UUID
+		months  int
+		wantErr error
+	}{
+		{name: "months 0", userID: validUser, months: 0, wantErr: messages.ErrInvalidMonthly},
+		{name: "months 1", userID: validUser, months: 1, wantErr: messages.ErrInvalidMonthly},
+		{name: "months 4", userID: validUser, months: 4, wantErr: messages.ErrInvalidMonthly},
+		{name: "months 7 (valor do /daily)", userID: validUser, months: 7, wantErr: messages.ErrInvalidMonthly},
+		{name: "months 24", userID: validUser, months: 24, wantErr: messages.ErrInvalidMonthly},
+		{name: "months negativo", userID: validUser, months: -2, wantErr: messages.ErrInvalidMonthly},
+		{name: "user_id inválido", userID: pgtype.UUID{}, months: 12, wantErr: messages.ErrValidUser},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, err := s.GetStatsMonthly(context.Background(), tt.userID, tt.months)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("erro = %v, quero %v", err, tt.wantErr)
+			}
+			if len(rows) != 0 {
+				t.Errorf("linhas = %d, quero 0", len(rows))
+			}
+		})
+	}
+}

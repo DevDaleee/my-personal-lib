@@ -41,6 +41,7 @@ func (app *application) mount() http.Handler {
 	r.Route("/stats", func(r chi.Router) {
 		r.Use(userctx.Middleware)
 		r.Get("/daily", statsHandler.GetStatsDaily)
+		r.Get("/monthly", statsHandler.GetStatsMonthly)
 	})
 
 	return r

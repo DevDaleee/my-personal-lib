@@ -12,6 +12,7 @@ import (
 
 type StatsServices interface {
 	GetStatsDaily(ctx context.Context, userID pgtype.UUID, days int) ([]repo.ListDailyStatsRow, error)
+	GetStatsMonthly(ctx context.Context, userID pgtype.UUID, months int) ([]repo.ListMonthlyFinishedRow, error)
 }
 
 type svc struct {
@@ -22,6 +23,28 @@ type svc struct {
 
 func NewService(repo *repo.Queries, db *pgxpool.Pool, loc *time.Location) StatsServices {
 	return &svc{repo: repo, db: db, loc: loc}
+}
+func (s *svc) GetStatsMonthly(ctx context.Context, userID pgtype.UUID, months int) ([]repo.ListMonthlyFinishedRow, error) {
+	if !userID.Valid {
+		return []repo.ListMonthlyFinishedRow{}, messages.ErrValidUser
+	}
+	if months != 2 && months != 3 && months != 6 && months != 12 {
+		return []repo.ListMonthlyFinishedRow{}, messages.ErrInvalidMonthly
+	}
+	today := time.Now().In(s.loc)
+
+	date := pgtype.Date{
+		Time:  time.Date(today.Year(), today.Month()-time.Month(months-1), 1, 0, 0, 0, 0, time.UTC),
+		Valid: true,
+	}
+	listMonthlyStatus, err := s.repo.ListMonthlyFinished(ctx, repo.ListMonthlyFinishedParams{
+		UserID:   userID,
+		StartDay: date,
+	})
+	if err != nil {
+		return []repo.ListMonthlyFinishedRow{}, err
+	}
+	return listMonthlyStatus, nil
 }
 
 func (s *svc) GetStatsDaily(ctx context.Context, userID pgtype.UUID, days int) ([]repo.ListDailyStatsRow, error) {

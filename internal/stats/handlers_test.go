@@ -21,12 +21,14 @@ import (
 // Cada teste diz o que o GetStatsDaily deve devolver (rows e err)
 // e, depois da requisição, confere se ele foi chamado e com quais valores.
 type fakeService struct {
-	rows []repo.ListDailyStatsRow
-	err  error
+	rows        []repo.ListDailyStatsRow
+	monthlyRows []repo.ListMonthlyFinishedRow
+	err         error
 
 	called    bool
 	gotUserID pgtype.UUID
 	gotDays   int
+	gotMonths int
 }
 
 func (f *fakeService) GetStatsDaily(ctx context.Context, userID pgtype.UUID, days int) ([]repo.ListDailyStatsRow, error) {
@@ -34,6 +36,13 @@ func (f *fakeService) GetStatsDaily(ctx context.Context, userID pgtype.UUID, day
 	f.gotUserID = userID
 	f.gotDays = days
 	return f.rows, f.err
+}
+
+func (f *fakeService) GetStatsMonthly(ctx context.Context, userID pgtype.UUID, months int) ([]repo.ListMonthlyFinishedRow, error) {
+	f.called = true
+	f.gotUserID = userID
+	f.gotMonths = months
+	return f.monthlyRows, f.err
 }
 
 // newTestRouter monta o mesmo caminho do cmd/stats/api.go (middleware + rota),
@@ -44,6 +53,7 @@ func newTestRouter(svc StatsServices) http.Handler {
 	r.Route("/stats", func(r chi.Router) {
 		r.Use(userctx.Middleware)
 		r.Get("/daily", h.GetStatsDaily)
+		r.Get("/monthly", h.GetStatsMonthly)
 	})
 	return r
 }
@@ -220,6 +230,175 @@ func TestGetStatsDaily(t *testing.T) {
 			for i, want := range tt.wantDaysInRes {
 				if body[i].Day != want {
 					t.Errorf("item %d: day = %q, quero %q", i, body[i].Day, want)
+				}
+			}
+		})
+	}
+}
+
+func TestGetStatsMonthly(t *testing.T) {
+	const userID = "11111111-1111-1111-1111-111111111111"
+
+	twoMonths := []repo.ListMonthlyFinishedRow{
+		{Month: day(2026, time.June, 1), FinishedCount: 2},
+		{Month: day(2026, time.November, 1), FinishedCount: 1},
+	}
+
+	tests := []struct {
+		name string
+
+		// requisição
+		query  string // o que vem depois de /stats/monthly
+		userID string // vazio = sem o cabeçalho X-User-ID
+
+		// o que o serviço falso devolve
+		svcRows []repo.ListMonthlyFinishedRow
+		svcErr  error
+
+		// o que esperamos
+		wantStatus      int
+		wantError       string // mensagem do campo "error"; vazio = resposta de sucesso
+		wantSvcCalled   bool
+		wantMonths      int      // months que o handler deve repassar ao serviço
+		wantMonthsInRes []string // campo "month" de cada item da resposta de sucesso
+	}{
+		{
+			name:            "sem ?months= usa o padrão 12",
+			query:           "",
+			userID:          userID,
+			svcRows:         twoMonths,
+			wantStatus:      http.StatusOK,
+			wantSvcCalled:   true,
+			wantMonths:      12,
+			wantMonthsInRes: []string{"2026-06-01", "2026-11-01"},
+		},
+		{
+			name:            "?months=6 é repassado ao serviço",
+			query:           "?months=6",
+			userID:          userID,
+			svcRows:         twoMonths,
+			wantStatus:      http.StatusOK,
+			wantSvcCalled:   true,
+			wantMonths:      6,
+			wantMonthsInRes: []string{"2026-06-01", "2026-11-01"},
+		},
+		{
+			name:            "usuário sem livros terminados recebe lista vazia, não null",
+			query:           "?months=3",
+			userID:          userID,
+			svcRows:         []repo.ListMonthlyFinishedRow{},
+			wantStatus:      http.StatusOK,
+			wantSvcCalled:   true,
+			wantMonths:      3,
+			wantMonthsInRes: []string{},
+		},
+		{
+			name:            "o parâmetro antigo ?monthly= é ignorado (usa o padrão 12)",
+			query:           "?monthly=2",
+			userID:          userID,
+			svcRows:         twoMonths,
+			wantStatus:      http.StatusOK,
+			wantSvcCalled:   true,
+			wantMonths:      12,
+			wantMonthsInRes: []string{"2026-06-01", "2026-11-01"},
+		},
+		{
+			name:          "?months=abc devolve 400 sem chamar o serviço",
+			query:         "?months=abc",
+			userID:        userID,
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrInvalidMonthly.Error(),
+			wantSvcCalled: false,
+		},
+		{
+			name:          "?months=5 chega ao serviço, que recusa com 400",
+			query:         "?months=5",
+			userID:        userID,
+			svcErr:        messages.ErrInvalidMonthly,
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrInvalidMonthly.Error(),
+			wantSvcCalled: true,
+			wantMonths:    5,
+		},
+		{
+			name:          "erro inesperado devolve 500 sem vazar a mensagem interna",
+			query:         "",
+			userID:        userID,
+			svcErr:        errors.New("connection refused"),
+			wantStatus:    http.StatusInternalServerError,
+			wantError:     messages.ErrInternalServerError.Error(),
+			wantSvcCalled: true,
+			wantMonths:    12,
+		},
+		{
+			name:          "sem o cabeçalho X-User-ID devolve 400",
+			query:         "",
+			userID:        "",
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrHeaderField.Error(),
+			wantSvcCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &fakeService{monthlyRows: tt.svcRows, err: tt.svcErr}
+
+			req := httptest.NewRequest(http.MethodGet, "/stats/monthly"+tt.query, nil)
+			if tt.userID != "" {
+				req.Header.Set(userctx.HeaderName, tt.userID)
+			}
+			rec := httptest.NewRecorder()
+
+			newTestRouter(svc).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, quero %d (corpo: %s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+
+			if svc.called != tt.wantSvcCalled {
+				t.Fatalf("serviço chamado = %v, quero %v", svc.called, tt.wantSvcCalled)
+			}
+
+			if tt.wantSvcCalled {
+				if svc.gotMonths != tt.wantMonths {
+					t.Errorf("months repassado = %d, quero %d", svc.gotMonths, tt.wantMonths)
+				}
+				if got := svc.gotUserID.String(); got != userID {
+					t.Errorf("user_id repassado = %s, quero %s", got, userID)
+				}
+			}
+
+			if tt.wantError != "" {
+				var body struct {
+					Error string `json:"error"`
+				}
+				if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+					t.Fatalf("corpo de erro não é JSON válido: %v", err)
+				}
+				if body.Error != tt.wantError {
+					t.Errorf("error = %q, quero %q", body.Error, tt.wantError)
+				}
+				return
+			}
+
+			// O app recebe o mês como texto "AAAA-MM-01" e a contagem como número.
+			var body []struct {
+				Month         string `json:"month"`
+				FinishedCount int64  `json:"finished_count"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("corpo de sucesso não é uma lista JSON: %v", err)
+			}
+			if body == nil {
+				t.Fatalf("corpo veio null; o app espera uma lista ([])")
+			}
+			if len(body) != len(tt.wantMonthsInRes) {
+				t.Fatalf("itens na resposta = %d, quero %d", len(body), len(tt.wantMonthsInRes))
+			}
+			for i, want := range tt.wantMonthsInRes {
+				if body[i].Month != want {
+					t.Errorf("item %d: month = %q, quero %q", i, body[i].Month, want)
 				}
 			}
 		})
