@@ -4,10 +4,12 @@ import (
 	"context"
 	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
 	messages "my-personal-lib/internal/error"
+	"my-personal-lib/internal/events"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 type BooksServices interface {
@@ -20,10 +22,11 @@ type BooksServices interface {
 type svc struct {
 	repo *repo.Queries
 	db   *pgxpool.Pool
+	js   jetstream.JetStream
 }
 
-func NewService(repo *repo.Queries, db *pgxpool.Pool) BooksServices {
-	return &svc{repo: repo, db: db}
+func NewService(repo *repo.Queries, db *pgxpool.Pool, js jetstream.JetStream) BooksServices {
+	return &svc{repo: repo, db: db, js: js}
 }
 
 func (s *svc) UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID pgtype.UUID, bookItems updateBookItem) (repo.Book, error) {
@@ -59,7 +62,7 @@ func (s *svc) UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID
 
 	bookStatus := statusForPage(bookItems.CurrentPage, book.TotalPages)
 
-	_, err = qtx.CreateProgressUpdate(ctx, repo.CreateProgressUpdateParams{
+	progress, err := qtx.CreateProgressUpdate(ctx, repo.CreateProgressUpdateParams{
 		BookID:       bookID,
 		PreviousPage: book.CurrentPage,
 		Status:       bookStatus,
@@ -69,12 +72,24 @@ func (s *svc) UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID
 		return repo.Book{}, err
 	}
 
-	updateBook, err := qtx.UpdateProgress(ctx, repo.UpdateProgressParams{
+	updatedBook, err := qtx.UpdateProgress(ctx, repo.UpdateProgressParams{
 		UserID:      userID,
 		ID:          bookID,
 		Status:      bookStatus,
 		CurrentPage: bookItems.CurrentPage,
 	})
+
+	evt := events.ReadingProgressUpdated{
+		EventID:      progress.ID,
+		Event:        events.EventProgressUpdated,
+		BookID:       bookID,
+		UserID:       userID,
+		PreviousPage: book.CurrentPage,
+		CurrentPage:  updatedBook.CurrentPage,
+		TotalPages:   book.TotalPages,
+		Status:       updatedBook.Status,
+		UpdatedAt:    progress.CreatedAt.Time,
+	}
 
 	if err != nil {
 		return repo.Book{}, err
@@ -82,7 +97,8 @@ func (s *svc) UpdateBookProgress(ctx context.Context, userID pgtype.UUID, bookID
 	if err := tx.Commit(ctx); err != nil {
 		return repo.Book{}, err
 	}
-	return updateBook, nil
+	s.publishProgressUpdated(ctx, evt)
+	return updatedBook, nil
 }
 
 func (s *svc) GetBookByStatus(ctx context.Context, userID pgtype.UUID, status pgtype.Text) ([]repo.Book, error) {
