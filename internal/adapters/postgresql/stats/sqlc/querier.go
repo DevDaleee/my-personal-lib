@@ -18,8 +18,8 @@ type Querier interface {
 	// Grava o evento bruto. Se o event_id já existe, não faz nada (idempotência).
 	// Linhas afetadas: 1 = evento novo (seguir para os resumos);
 	//                  0 = duplicado (pular o resto, commit e confirmar a mensagem).
-	// pages_read = max(current_page - previous_page, 0) e event_date (dia em UTC)
-	// são calculados no Go e passados como parâmetro.
+	// pages_read = max(current_page - previous_page, 0) e event_date (o dia em
+	// America/Sao_Paulo, decisão de 17/11) são calculados no Go e passados como parâmetro.
 	InsertReadingEvent(ctx context.Context, arg InsertReadingEventParams) (int64, error)
 	// ============ Endpoints GET /stats/* ============
 	// GET /stats/daily. start_day é calculado no Go (ex.: hoje - 30 dias).

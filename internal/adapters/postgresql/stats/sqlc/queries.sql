@@ -4,8 +4,8 @@
 -- Grava o evento bruto. Se o event_id já existe, não faz nada (idempotência).
 -- Linhas afetadas: 1 = evento novo (seguir para os resumos);
 --                  0 = duplicado (pular o resto, commit e confirmar a mensagem).
--- pages_read = max(current_page - previous_page, 0) e event_date (dia em UTC)
--- são calculados no Go e passados como parâmetro.
+-- pages_read = max(current_page - previous_page, 0) e event_date (o dia em
+-- America/Sao_Paulo, decisão de 17/11) são calculados no Go e passados como parâmetro.
 INSERT INTO reading_events (
     event_id, book_id, user_id, previous_page, current_page,
     pages_read, status, event_date, occurred_at

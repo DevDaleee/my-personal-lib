@@ -60,8 +60,8 @@ type InsertReadingEventParams struct {
 //
 //	0 = duplicado (pular o resto, commit e confirmar a mensagem).
 //
-// pages_read = max(current_page - previous_page, 0) e event_date (dia em UTC)
-// são calculados no Go e passados como parâmetro.
+// pages_read = max(current_page - previous_page, 0) e event_date (o dia em
+// America/Sao_Paulo, decisão de 17/11) são calculados no Go e passados como parâmetro.
 func (q *Queries) InsertReadingEvent(ctx context.Context, arg InsertReadingEventParams) (int64, error) {
 	result, err := q.db.Exec(ctx, insertReadingEvent,
 		arg.EventID,
