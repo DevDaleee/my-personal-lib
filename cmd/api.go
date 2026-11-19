@@ -36,7 +36,7 @@ func (app *application) mount() http.Handler {
 		w.Write([]byte("All good"))
 	})
 
-	bookService := books.NewSerice(repo.New(app.db), app.db)
+	bookService := books.NewService(repo.New(app.db), app.db)
 	bookHandler := books.NewHandler(bookService)
 	r.Route("/books", func(r chi.Router) {
 		r.Use(userctx.Middleware)

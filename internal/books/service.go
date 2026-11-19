@@ -22,7 +22,7 @@ type svc struct {
 	db   *pgxpool.Pool
 }
 
-func NewSerice(repo *repo.Queries, db *pgxpool.Pool) BooksServices {
+func NewService(repo *repo.Queries, db *pgxpool.Pool) BooksServices {
 	return &svc{repo: repo, db: db}
 }
 
