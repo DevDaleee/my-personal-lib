@@ -2,8 +2,11 @@ package stats
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	repo "my-personal-lib/internal/adapters/postgresql/stats/sqlc"
 	messages "my-personal-lib/internal/error"
+	"my-personal-lib/internal/events"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -14,6 +17,7 @@ type StatsServices interface {
 	GetStatsDaily(ctx context.Context, userID pgtype.UUID, days int) ([]repo.ListDailyStatsRow, error)
 	GetStatsMonthly(ctx context.Context, userID pgtype.UUID, months int) ([]repo.ListMonthlyFinishedRow, error)
 	GetStatsStreak(ctx context.Context, userID pgtype.UUID) (int, error)
+	ProcessProgressUpdated(ctx context.Context, evt events.ReadingProgressUpdated) error
 }
 
 type svc struct {
@@ -24,6 +28,58 @@ type svc struct {
 
 func NewService(repo *repo.Queries, db *pgxpool.Pool, loc *time.Location) StatsServices {
 	return &svc{repo: repo, db: db, loc: loc}
+}
+
+func (s *svc) ProcessProgressUpdated(ctx context.Context, evt events.ReadingProgressUpdated) error {
+	pagesRead := max(evt.CurrentPage-evt.PreviousPage, 0)
+
+	local := evt.UpdatedAt.In(s.loc)
+
+	day := pgtype.Date{Time: time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.UTC), Valid: true}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+
+	defer tx.Rollback(ctx)
+	qtx := s.repo.WithTx(tx)
+
+	rows, err := qtx.InsertReadingEvent(ctx, repo.InsertReadingEventParams{
+		EventID:      evt.EventID,
+		BookID:       evt.BookID,
+		UserID:       evt.UserID,
+		PreviousPage: evt.PreviousPage,
+		CurrentPage:  evt.CurrentPage,
+		Status:       evt.Status,
+		PagesRead:    pagesRead,
+		EventDate:    day,
+		OccurredAt:   pgtype.Timestamptz{Time: evt.UpdatedAt, Valid: true},
+	})
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		slog.Info("duplicated event ignored", "event_id", evt.EventID.String())
+		return nil
+	}
+	err = qtx.UpsertDailySummary(ctx, repo.UpsertDailySummaryParams{UserID: evt.UserID, Day: day, PagesRead: pagesRead})
+	if err != nil {
+		return fmt.Errorf("upset finished book: %w", err)
+	}
+
+	if evt.Status == "read" {
+		err = qtx.InsertFinishedBook(ctx, repo.InsertFinishedBookParams{
+			UserID:     evt.UserID,
+			BookID:     evt.BookID,
+			FinishedOn: day,
+		})
+		if err != nil {
+			return fmt.Errorf("insert finished book: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *svc) GetStatsStreak(ctx context.Context, userID pgtype.UUID) (int, error) {

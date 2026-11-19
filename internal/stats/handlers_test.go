@@ -14,6 +14,7 @@ import (
 
 	repo "my-personal-lib/internal/adapters/postgresql/stats/sqlc"
 	messages "my-personal-lib/internal/error"
+	"my-personal-lib/internal/events"
 	"my-personal-lib/internal/userctx"
 )
 
@@ -44,6 +45,11 @@ func (f *fakeService) GetStatsMonthly(ctx context.Context, userID pgtype.UUID, m
 	f.gotUserID = userID
 	f.gotMonths = months
 	return f.monthlyRows, f.err
+}
+
+// O consumer não passa pelo roteador HTTP; existe só para o fake satisfazer a interface.
+func (f *fakeService) ProcessProgressUpdated(ctx context.Context, evt events.ReadingProgressUpdated) error {
+	return nil
 }
 
 func (f *fakeService) GetStatsStreak(ctx context.Context, userID pgtype.UUID) (int, error) {
