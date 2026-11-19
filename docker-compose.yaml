@@ -73,6 +73,13 @@ services:
     ports:
       - "4222:4222" # clientes (books e stats)
       - "8222:8222" # monitoramento
+    # O nats.Connect tenta uma vez só: os serviços esperam o /healthz responder.
+    # Aqui localhost é o próprio container do NATS.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:8222/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   stats:
     build:
@@ -98,16 +105,20 @@ services:
       - "9090:9090"
     env_file: .env
     environment:
-      # Sobrescreve o DSN do .env: dentro da rede do Compose, o host do banco
-      # é o nome do serviço (postgres), e não localhost.
+      # Sobrescreve os endereços do .env: dentro da rede do Compose, o host
+      # é o nome do serviço (books-postgres, nats), e não localhost.
       GOOSE_DBSTRING: host=books-postgres user=${BOOKS_DB_USER} password=${BOOKS_DB_PASS} dbname=${BOOKS_DB_NAME} sslmode=disable
+      NATS_URL: nats://nats:4222
     depends_on:
       books-postgres:
         # Só sobe o books depois que o healthcheck do postgres passar...
         condition: service_healthy
       migrate-books:
-        # ...e depois que as migrations terminarem sem erro.
+        # ...depois que as migrations terminarem sem erro...
         condition: service_completed_successfully
+      nats:
+        # ...e depois que o NATS estiver pronto para conexões.
+        condition: service_healthy
 
   # Ponto único de entrada: o app fala só com o gateway, nunca direto com os serviços.
   gateway:
