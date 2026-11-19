@@ -91,7 +91,10 @@ services:
       # Sobrescreve o DSN do .env: dentro da rede do Compose, o host do banco
       # é o nome do serviço (postgres), e não localhost.
       STATS_DBSTRING: host=stats-postgres user=${STATS_DB_USER} password=${STATS_DB_PASS} dbname=${STATS_DB_NAME} sslmode=disable
+      NATS_URL: nats://nats:4222
     depends_on:
+      nats:
+        condition: service_healthy
       stats-postgres:
         # Só sobe o Stats depois que o healthcheck do postgres passar...
         condition: service_healthy

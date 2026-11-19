@@ -70,10 +70,7 @@ func main() {
 	}
 
 	streamCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	_, err = js.CreateOrUpdateStream(streamCtx, jetstream.StreamConfig{
-		Name:     events.StreamName,
-		Subjects: []string{events.StreamSubjects},
-	})
+	err = events.EnsureStream(streamCtx, js)
 	cancel()
 	if err != nil {
 		slog.Error("cannot create stream", "error", err)

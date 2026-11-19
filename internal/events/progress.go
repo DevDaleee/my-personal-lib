@@ -1,9 +1,11 @@
 package events
 
 import (
+	"context"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 const (
@@ -23,4 +25,12 @@ type ReadingProgressUpdated struct {
 	TotalPages   int32       `json:"total_pages"`
 	Status       string      `json:"status"`
 	UpdatedAt    time.Time   `json:"updated_at"`
+}
+
+func EnsureStream(ctx context.Context, js jetstream.JetStream) error {
+	_, erro := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name:     StreamName,
+		Subjects: []string{StreamSubjects},
+	})
+	return erro
 }
