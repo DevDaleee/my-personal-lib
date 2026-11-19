@@ -64,6 +64,16 @@ services:
       stats-postgres:
         condition: service_healthy
 
+  # Servidor de mensagens: o books publica os eventos e o stats os consome.
+  nats:
+    image: nats:2.10-alpine
+    # -js liga o JetStream (guarda as mensagens até o consumer confirmar).
+    # -m 8222 liga o monitoramento HTTP (/healthz, /varz).
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222" # clientes (books e stats)
+      - "8222:8222" # monitoramento
+
   stats:
     build:
       context: .
