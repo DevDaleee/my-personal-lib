@@ -64,6 +64,24 @@ services:
       stats-postgres:
         condition: service_healthy
 
+  stats:
+    build:
+      context: .
+      target: stats
+    ports:
+      - "9091:9091"
+    environment:
+      # Sobrescreve o DSN do .env: dentro da rede do Compose, o host do banco
+      # é o nome do serviço (postgres), e não localhost.
+      STATS_DBSTRING: host=stats-postgres user=${STATS_DB_USER} password=${STATS_DB_PASS} dbname=${STATS_DB_NAME} sslmode=disable
+    depends_on:
+      stats-postgres:
+        # Só sobe o Stats depois que o healthcheck do postgres passar...
+        condition: service_healthy
+      migrate-stats:
+        # ...e depois que as migrations terminarem sem erro.
+        condition: service_completed_successfully
+
   books:
     build: .
     ports:

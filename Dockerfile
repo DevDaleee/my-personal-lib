@@ -8,7 +8,9 @@ RUN go mod download
 
 COPY . .
 # CGO_ENABLED=0 gera um executável estático, que roda no alpine sem dependências.
+# O mesmo estágio compila os dois serviços; cada imagem final copia só o seu.
 RUN CGO_ENABLED=0 go build -o /out/books-service ./cmd
+RUN CGO_ENABLED=0 go build -o /out/stats-service ./cmd/stats
 
 # Estágio 2: compila a CLI do goose, na mesma versão usada fora do Docker.
 FROM golang:1.27-alpine AS goose-builder
@@ -26,7 +28,17 @@ USER app
 # O goose lê GOOSE_DRIVER, GOOSE_DBSTRING e GOOSE_MIGRATION_DIR do ambiente.
 CMD ["goose", "up"]
 
-# Estágio 4 (final): imagem mínima do books-service, só com o executável.
+# Estágio 4 (alvo "stats"): imagem mínima do stats-service.
+# Usado pelo serviço stats do docker-compose.yaml (target: stats).
+# Não precisa do pacote tzdata: o binário já embute os fusos (import de time/tzdata).
+FROM alpine:3.22 AS stats
+RUN adduser -D -H app
+COPY --from=builder /out/stats-service /usr/local/bin/stats-service
+USER app
+EXPOSE 9091
+CMD ["stats-service"]
+
+# Estágio 5 (final): imagem mínima do books-service, só com o executável.
 # Fica por último porque é o alvo padrão de um "docker build" sem --target.
 FROM alpine:3.22
 
