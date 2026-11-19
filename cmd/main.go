@@ -4,11 +4,14 @@ import (
 	"context"
 	"log/slog"
 	"my-personal-lib/internal/env"
+	"my-personal-lib/internal/events"
 	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 func main() {
@@ -47,9 +50,42 @@ func main() {
 
 	slog.Info("Connected to database")
 
+	natsEnv, err := env.GetRequired("NATS_URL")
+	if err != nil {
+		slog.Error("invalid nats config", "error", err)
+		os.Exit(1)
+	}
+
+	nc, err := nats.Connect(natsEnv)
+	if err != nil {
+		slog.Error("cannot connect to NATS", "error", err)
+		os.Exit(1)
+	}
+	defer nc.Close()
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		slog.Error("cannot create JetStream context", "error", err)
+		os.Exit(1)
+	}
+
+	streamCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	_, err = js.CreateOrUpdateStream(streamCtx, jetstream.StreamConfig{
+		Name:     events.StreamName,
+		Subjects: []string{events.StreamSubjects},
+	})
+	cancel()
+	if err != nil {
+		slog.Error("cannot create stream", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("Connected to NATS")
+
 	api := application{
 		config: cfg,
 		db:     conn,
+		js:     js,
 	}
 
 	if err := api.run(api.mount()); err != nil {

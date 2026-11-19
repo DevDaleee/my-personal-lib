@@ -10,6 +10,7 @@ const (
 	StreamName             = "BOOKS"
 	SubjectProgressUpdated = "books.progress.updated"
 	EventProgressUpdated   = "ReadingProgressUpdated"
+	StreamSubjects         = "books.>"
 )
 
 type ReadingProgressUpdated struct {

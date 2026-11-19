@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 func (app *application) mount() http.Handler {
@@ -65,6 +66,7 @@ func (app *application) run(h http.Handler) error {
 type application struct {
 	config config
 	db     *pgxpool.Pool
+	js     jetstream.JetStream
 }
 type config struct {
 	addr string
