@@ -6,6 +6,7 @@ import (
 	"my-personal-lib/internal/env"
 	"os"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -31,6 +32,12 @@ func main() {
 		},
 	}
 
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		slog.Error("cannot load timezone", "error", err)
+		os.Exit(1)
+	}
+
 	conn, err := pgxpool.New(ctx, cfg.db.dsn)
 	if err != nil {
 		slog.Error("cannot create databse pool", "error", err)
@@ -50,6 +57,7 @@ func main() {
 	api := application{
 		config: cfg,
 		db:     conn,
+		loc:    loc,
 	}
 
 	if err := api.run(api.mount()); err != nil {

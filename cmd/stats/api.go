@@ -2,8 +2,11 @@ package main
 
 import (
 	"log"
+	statsrepo "my-personal-lib/internal/adapters/postgresql/stats/sqlc"
 	messages "my-personal-lib/internal/error"
 	"my-personal-lib/internal/json"
+	"my-personal-lib/internal/stats"
+	"my-personal-lib/internal/userctx"
 	"net/http"
 	"time"
 
@@ -33,6 +36,13 @@ func (app *application) mount() http.Handler {
 		w.Write([]byte("All good"))
 	})
 
+	statsService := stats.NewService(statsrepo.New(app.db), app.db, app.loc)
+	statsHandler := stats.NewHandler(statsService)
+	r.Route("/stats", func(r chi.Router) {
+		r.Use(userctx.Middleware)
+		r.Get("/daily", statsHandler.GetStatsDaily)
+	})
+
 	return r
 }
 
@@ -52,6 +62,7 @@ func (app *application) run(h http.Handler) error {
 type application struct {
 	config config
 	db     *pgxpool.Pool
+	loc    *time.Location
 }
 type config struct {
 	addr string
