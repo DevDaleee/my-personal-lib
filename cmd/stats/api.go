@@ -42,6 +42,7 @@ func (app *application) mount() http.Handler {
 		r.Use(userctx.Middleware)
 		r.Get("/daily", statsHandler.GetStatsDaily)
 		r.Get("/monthly", statsHandler.GetStatsMonthly)
+		r.Get("/streak", statsHandler.GetStatsStreak)
 	})
 
 	return r

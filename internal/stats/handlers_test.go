@@ -23,6 +23,7 @@ import (
 type fakeService struct {
 	rows        []repo.ListDailyStatsRow
 	monthlyRows []repo.ListMonthlyFinishedRow
+	streak      int
 	err         error
 
 	called    bool
@@ -45,6 +46,12 @@ func (f *fakeService) GetStatsMonthly(ctx context.Context, userID pgtype.UUID, m
 	return f.monthlyRows, f.err
 }
 
+func (f *fakeService) GetStatsStreak(ctx context.Context, userID pgtype.UUID) (int, error) {
+	f.called = true
+	f.gotUserID = userID
+	return f.streak, f.err
+}
+
 // newTestRouter monta o mesmo caminho do cmd/stats/api.go (middleware + rota),
 // para o teste cobrir também o cabeçalho X-User-ID.
 func newTestRouter(svc StatsServices) http.Handler {
@@ -54,6 +61,7 @@ func newTestRouter(svc StatsServices) http.Handler {
 		r.Use(userctx.Middleware)
 		r.Get("/daily", h.GetStatsDaily)
 		r.Get("/monthly", h.GetStatsMonthly)
+		r.Get("/streak", h.GetStatsStreak)
 	})
 	return r
 }
@@ -400,6 +408,116 @@ func TestGetStatsMonthly(t *testing.T) {
 				if body[i].Month != want {
 					t.Errorf("item %d: month = %q, quero %q", i, body[i].Month, want)
 				}
+			}
+		})
+	}
+}
+
+func TestGetStatsStreak(t *testing.T) {
+	const userID = "11111111-1111-1111-1111-111111111111"
+
+	tests := []struct {
+		name string
+
+		// requisição
+		userID string // vazio = sem o cabeçalho X-User-ID
+
+		// o que o serviço falso devolve
+		svcStreak int
+		svcErr    error
+
+		// o que esperamos
+		wantStatus    int
+		wantError     string // mensagem do campo "error"; vazio = resposta de sucesso
+		wantSvcCalled bool
+		wantStreak    int
+	}{
+		{
+			name:          "devolve a sequência num objeto com current_streak",
+			userID:        userID,
+			svcStreak:     4,
+			wantStatus:    http.StatusOK,
+			wantSvcCalled: true,
+			wantStreak:    4,
+		},
+		{
+			name:          "sequência zero também é 200",
+			userID:        userID,
+			svcStreak:     0,
+			wantStatus:    http.StatusOK,
+			wantSvcCalled: true,
+			wantStreak:    0,
+		},
+		{
+			name:          "erro inesperado devolve 500 sem vazar a mensagem interna",
+			userID:        userID,
+			svcErr:        errors.New("connection refused"),
+			wantStatus:    http.StatusInternalServerError,
+			wantError:     messages.ErrInternalServerError.Error(),
+			wantSvcCalled: true,
+		},
+		{
+			name:          "sem o cabeçalho X-User-ID devolve 400",
+			userID:        "",
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrHeaderField.Error(),
+			wantSvcCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &fakeService{streak: tt.svcStreak, err: tt.svcErr}
+
+			req := httptest.NewRequest(http.MethodGet, "/stats/streak", nil)
+			if tt.userID != "" {
+				req.Header.Set(userctx.HeaderName, tt.userID)
+			}
+			rec := httptest.NewRecorder()
+
+			newTestRouter(svc).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, quero %d (corpo: %s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+
+			if svc.called != tt.wantSvcCalled {
+				t.Fatalf("serviço chamado = %v, quero %v", svc.called, tt.wantSvcCalled)
+			}
+			if tt.wantSvcCalled {
+				if got := svc.gotUserID.String(); got != userID {
+					t.Errorf("user_id repassado = %s, quero %s", got, userID)
+				}
+			}
+
+			if tt.wantError != "" {
+				var body struct {
+					Error string `json:"error"`
+				}
+				if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+					t.Fatalf("corpo de erro não é JSON válido: %v", err)
+				}
+				if body.Error != tt.wantError {
+					t.Errorf("error = %q, quero %q", body.Error, tt.wantError)
+				}
+				return
+			}
+
+			// Decodifica num mapa para conferir o NOME do campo que o app lê:
+			// se a tag mudar (ou o campo virar minúsculo), "current_streak" some.
+			var body map[string]int
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("corpo de sucesso não é um objeto JSON: %v", err)
+			}
+			got, ok := body["current_streak"]
+			if !ok {
+				t.Fatalf("resposta sem o campo current_streak: %v", body)
+			}
+			if got != tt.wantStreak {
+				t.Errorf("current_streak = %d, quero %d", got, tt.wantStreak)
+			}
+			if len(body) != 1 {
+				t.Errorf("resposta com campos a mais: %v", body)
 			}
 		})
 	}

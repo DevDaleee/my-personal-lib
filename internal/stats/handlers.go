@@ -21,6 +21,25 @@ func NewHandler(service StatsServices) *StatsHandler {
 	}
 }
 
+func (h *StatsHandler) GetStatsStreak(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userctx.FromContext(r.Context())
+	if !ok {
+		slog.Error("Invalid User", "Error:", messages.ErrValidUser.Error(), "user_id", userID.String())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+
+	streak, err := h.service.GetStatsStreak(r.Context(), userID)
+	if err != nil {
+		slog.Error("Get streak failed", "error", err)
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+
+	json.Write(w, http.StatusOK, StreakResponse{CurrentStreak: streak})
+
+}
+
 func (h *StatsHandler) GetStatsMonthly(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {

@@ -91,3 +91,19 @@ func TestGetStatsMonthlyRejectsBeforeQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestGetStatsStreakRejectsInvalidUser(t *testing.T) {
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatalf("não carregou o fuso: %v", err)
+	}
+	s := NewService(nil, nil, loc)
+
+	got, err := s.GetStatsStreak(context.Background(), pgtype.UUID{})
+	if !errors.Is(err, messages.ErrValidUser) {
+		t.Fatalf("erro = %v, quero %v", err, messages.ErrValidUser)
+	}
+	if got != 0 {
+		t.Errorf("sequência = %d, quero 0", got)
+	}
+}
