@@ -27,6 +27,11 @@ type fakeService struct {
 	streak      int
 	err         error
 
+	// usados pelos testes do consumer
+	processErr    error
+	processCalled bool
+	gotEvent      events.ReadingProgressUpdated
+
 	called    bool
 	gotUserID pgtype.UUID
 	gotDays   int
@@ -47,9 +52,10 @@ func (f *fakeService) GetStatsMonthly(ctx context.Context, userID pgtype.UUID, m
 	return f.monthlyRows, f.err
 }
 
-// O consumer não passa pelo roteador HTTP; existe só para o fake satisfazer a interface.
 func (f *fakeService) ProcessProgressUpdated(ctx context.Context, evt events.ReadingProgressUpdated) error {
-	return nil
+	f.processCalled = true
+	f.gotEvent = evt
+	return f.processErr
 }
 
 func (f *fakeService) GetStatsStreak(ctx context.Context, userID pgtype.UUID) (int, error) {

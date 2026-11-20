@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"log/slog"
+	statsrepo "my-personal-lib/internal/adapters/postgresql/stats/sqlc"
 	"my-personal-lib/internal/env"
 	"my-personal-lib/internal/events"
+	"my-personal-lib/internal/stats"
 	"os"
 	"time"
 	_ "time/tzdata"
@@ -85,6 +87,18 @@ func main() {
 	}
 
 	slog.Info("Connected to NATS")
+
+	statsService := stats.NewService(statsrepo.New(conn), conn, loc)
+	consumerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cc, err := stats.StartConsumer(consumerCtx, js, statsService)
+	cancel()
+	if err != nil {
+		slog.Error("cannot start consumer", "error", err)
+		os.Exit(1)
+	}
+	defer cc.Stop()
+
+	slog.Info("Consumer started", "durable", "stats")
 
 	api := application{
 		config: cfg,

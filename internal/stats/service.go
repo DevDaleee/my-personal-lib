@@ -66,7 +66,7 @@ func (s *svc) ProcessProgressUpdated(ctx context.Context, evt events.ReadingProg
 	}
 	err = qtx.UpsertDailySummary(ctx, repo.UpsertDailySummaryParams{UserID: evt.UserID, Day: day, PagesRead: pagesRead})
 	if err != nil {
-		return fmt.Errorf("upset finished book: %w", err)
+		return fmt.Errorf("upsert daily summary: %w", err)
 	}
 
 	if evt.Status == "read" {
