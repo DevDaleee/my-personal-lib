@@ -48,10 +48,11 @@ func (app *application) mount() http.Handler {
 		r.Patch("/{id}/progress", bookHandler.UpdateBookProgress)
 	})
 
-	authService := auth.NewService(repo.New(app.db))
+	authService := auth.NewService(repo.New(app.db), app.config.jwt)
 	authHandler := auth.NewHandler(authService)
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/register", authHandler.Register)
+		r.Post("/login", authHandler.Login)
 	})
 
 	return r

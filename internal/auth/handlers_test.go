@@ -20,8 +20,9 @@ import (
 // fakeService implementa AuthService sem banco: devolve o que o teste mandar
 // e registra com quais valores foi chamado.
 type fakeService struct {
-	user repo.CreateUserRow
-	err  error
+	user  repo.CreateUserRow
+	token string
+	err   error
 
 	called      bool
 	gotEmail    string
@@ -35,12 +36,20 @@ func (f *fakeService) Register(ctx context.Context, email string, password strin
 	return f.user, f.err
 }
 
+func (f *fakeService) Login(ctx context.Context, email string, password string) (string, error) {
+	f.called = true
+	f.gotEmail = email
+	f.gotPassword = password
+	return f.token, f.err
+}
+
 // newTestRouter monta o mesmo caminho do cmd/api.go: /auth/register sem middleware.
 func newTestRouter(svc AuthService) http.Handler {
 	h := NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/register", h.Register)
+		r.Post("/login", h.Login)
 	})
 	return r
 }
@@ -165,6 +174,108 @@ func TestRegister(t *testing.T) {
 			}
 			if svc.gotPassword != "senha-forte-1" {
 				t.Errorf("senha repassada ao service = %q", svc.gotPassword)
+			}
+		})
+	}
+}
+
+func TestLogin(t *testing.T) {
+	const fakeToken = "aaa.bbb.ccc"
+
+	tests := []struct {
+		name string
+
+		body string
+
+		svcToken string
+		svcErr   error
+
+		wantStatus    int
+		wantError     string // vazio = resposta de sucesso
+		wantSvcCalled bool
+	}{
+		{
+			name:          "credenciais certas devolvem 200 com o token",
+			body:          `{"email": "ana@example.com", "password": "senha-forte-1"}`,
+			svcToken:      fakeToken,
+			wantStatus:    http.StatusOK,
+			wantSvcCalled: true,
+		},
+		{
+			name:          "credenciais erradas devolvem 401 com mensagem genérica",
+			body:          `{"email": "ana@example.com", "password": "errada-123"}`,
+			svcErr:        messages.ErrInvalidCredentials,
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrInvalidCredentials.Error(),
+			wantSvcCalled: true,
+		},
+		{
+			name:          "erro inesperado devolve só o 500, sem vazar a mensagem interna",
+			body:          `{"email": "ana@example.com", "password": "senha-forte-1"}`,
+			svcErr:        errors.New("connection refused"),
+			wantStatus:    http.StatusInternalServerError,
+			wantError:     messages.ErrInternalServerError.Error(),
+			wantSvcCalled: true,
+		},
+		{
+			name:          "campo desconhecido devolve 400 sem chamar o service",
+			body:          `{"email": "ana@example.com", "password": "senha-forte-1", "remember": true}`,
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrMissingFields.Error(),
+			wantSvcCalled: false,
+		},
+		{
+			name:          "JSON quebrado devolve 400 sem chamar o service",
+			body:          `{"email": `,
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrMissingFields.Error(),
+			wantSvcCalled: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &fakeService{token: tt.svcToken, err: tt.svcErr}
+
+			req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			newTestRouter(svc).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, quero %d (corpo: %s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if svc.called != tt.wantSvcCalled {
+				t.Fatalf("service chamado = %v, quero %v", svc.called, tt.wantSvcCalled)
+			}
+
+			// Um objeto JSON só: pega um return esquecido depois de um erro.
+			dec := json.NewDecoder(bytes.NewReader(rec.Body.Bytes()))
+			var body map[string]any
+			if err := dec.Decode(&body); err != nil {
+				t.Fatalf("corpo não é JSON válido: %v (corpo: %s)", err, rec.Body.String())
+			}
+			if dec.More() {
+				t.Fatalf("o handler escreveu mais de uma resposta no corpo: %s", rec.Body.String())
+			}
+
+			if tt.wantError != "" {
+				if body["error"] != tt.wantError {
+					t.Errorf("error = %v, quero %q", body["error"], tt.wantError)
+				}
+				if _, ok := body["token"]; ok {
+					t.Errorf("resposta de erro não pode ter token: %v", body)
+				}
+				return
+			}
+
+			// Sucesso: exatamente {"token": "..."}.
+			if body["token"] != fakeToken || len(body) != 1 {
+				t.Errorf("corpo = %v, quero só {\"token\": %q}", body, fakeToken)
+			}
+			if svc.gotEmail != "ana@example.com" || svc.gotPassword != "senha-forte-1" {
+				t.Errorf("repassado ao service: email=%q senha=%q", svc.gotEmail, svc.gotPassword)
 			}
 		})
 	}

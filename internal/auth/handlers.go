@@ -41,3 +41,24 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	json.Write(w, http.StatusCreated, user)
 }
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req loginRequest
+	if err := json.Read(r, &req); err != nil {
+		json.WriteError(w, http.StatusBadRequest, messages.ErrMissingFields.Error())
+		return
+	}
+
+	token, err := h.service.Login(r.Context(), req.Email, req.Password)
+	if err != nil {
+		if errors.Is(err, messages.ErrInvalidCredentials) {
+			json.WriteError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		slog.Error("login failed", "error", err)
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+
+	json.Write(w, http.StatusOK, loginResponse{Token: token})
+}

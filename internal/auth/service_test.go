@@ -13,7 +13,7 @@ import (
 // Se algum caso passar da validação por engano, o service tenta usar o repo nil e entra
 // em pânico; o recover abaixo transforma isso numa falha legível do teste.
 func TestRegisterRejectsBeforeDatabase(t *testing.T) {
-	s := NewService(nil)
+	s := NewService(nil, []byte("chave-de-teste-com-mais-de-32-caracteres"))
 
 	tests := []struct {
 		name     string
