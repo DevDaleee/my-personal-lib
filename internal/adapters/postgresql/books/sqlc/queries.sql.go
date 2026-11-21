@@ -108,6 +108,34 @@ func (q *Queries) CreateProgressUpdate(ctx context.Context, arg CreateProgressUp
 	return i, err
 }
 
+const createUser = `-- name: CreateUser :one
+
+INSERT INTO users (email, password_hash)
+VALUES ($1, $2)
+RETURNING id, email, created_at
+`
+
+type CreateUserParams struct {
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+}
+
+type CreateUserRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	Email     string             `json:"email"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// ============ Login (decisão de 20/11/2026) ============
+// Cadastra a conta. O email chega já em minúsculas e a senha já como hash bcrypt.
+// E-mail repetido viola o UNIQUE (erro 23505 do Postgres): o Go traduz para 409.
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash)
+	var i CreateUserRow
+	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	return i, err
+}
+
 const deleteBook = `-- name: DeleteBook :execrows
 DELETE FROM books
 WHERE id = $1 AND user_id = $2
@@ -195,6 +223,27 @@ func (q *Queries) GetBookForUpdate(ctx context.Context, arg GetBookForUpdatePara
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, email, password_hash
+FROM users
+WHERE email = $1
+`
+
+type GetUserByEmailRow struct {
+	ID           pgtype.UUID `json:"id"`
+	Email        string      `json:"email"`
+	PasswordHash string      `json:"password_hash"`
+}
+
+// Usado no login: traz o hash para o Go comparar com a senha digitada.
+// Nenhuma linha (pgx.ErrNoRows) = e-mail não cadastrado → 401 genérico.
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, email)
+	var i GetUserByEmailRow
+	err := row.Scan(&i.ID, &i.Email, &i.PasswordHash)
 	return i, err
 }
 

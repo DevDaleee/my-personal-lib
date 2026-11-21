@@ -14,12 +14,19 @@ type Querier interface {
 	// o id vira o event_id e o created_at vira o updated_at do evento no NATS.
 	// Roda na mesma transação do GetBookForUpdate e do UpdateProgress.
 	CreateProgressUpdate(ctx context.Context, arg CreateProgressUpdateParams) (CreateProgressUpdateRow, error)
+	// ============ Login (decisão de 20/11/2026) ============
+	// Cadastra a conta. O email chega já em minúsculas e a senha já como hash bcrypt.
+	// E-mail repetido viola o UNIQUE (erro 23505 do Postgres): o Go traduz para 409.
+	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteBook(ctx context.Context, arg DeleteBookParams) (int64, error)
 	GetBook(ctx context.Context, arg GetBookParams) (Book, error)
 	// Igual ao GetBook, mas trava a linha até o fim da transação (FOR UPDATE).
 	// Assim dois PATCH simultâneos não leem o mesmo current_page e o stats
 	// não conta as mesmas páginas duas vezes. Só funciona dentro de uma transação.
 	GetBookForUpdate(ctx context.Context, arg GetBookForUpdateParams) (Book, error)
+	// Usado no login: traz o hash para o Go comparar com a senha digitada.
+	// Nenhuma linha (pgx.ErrNoRows) = e-mail não cadastrado → 401 genérico.
+	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, error)
 	ListProgressUpdates(ctx context.Context, arg ListProgressUpdatesParams) ([]ProgressUpdate, error)
 	SetRating(ctx context.Context, arg SetRatingParams) (Book, error)
