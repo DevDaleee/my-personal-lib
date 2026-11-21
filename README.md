@@ -8,7 +8,11 @@
 [AWS_BADGE]: https://img.shields.io/badge/AWS-EC2-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white
 [AZURE_BADGE]: https://img.shields.io/badge/Azure-VM-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white
 
-<h1 align="center" style="font-weight: bold;">Biblioteca Pessoal 📚</h1>
+<p align="center">
+    <img src="assets/logo/logo.svg" alt="Logo da Biblioteca Pessoal" width="120px">
+</p>
+
+<h1 align="center" style="font-weight: bold;">Biblioteca Pessoal</h1>
 
 <p align="center">
 
