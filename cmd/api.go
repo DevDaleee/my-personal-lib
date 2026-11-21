@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
+	"my-personal-lib/internal/auth"
 	"my-personal-lib/internal/books"
 	messages "my-personal-lib/internal/error"
 	"my-personal-lib/internal/json"
@@ -45,6 +46,12 @@ func (app *application) mount() http.Handler {
 		r.Get("/{id}", bookHandler.GetBookByID)
 		r.Get("/", bookHandler.GetBookByStatus)
 		r.Patch("/{id}/progress", bookHandler.UpdateBookProgress)
+	})
+
+	authService := auth.NewService(repo.New(app.db))
+	authHandler := auth.NewHandler(authService)
+	r.Route("/auth", func(r chi.Router) {
+		r.Post("/register", authHandler.Register)
 	})
 
 	return r
