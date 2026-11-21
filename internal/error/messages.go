@@ -28,4 +28,6 @@ var (
 	ErrWeakPassword        = errors.New("A senha deve ter entre 8 e 72 caracteres")
 	ErrEmailTaken          = errors.New("Já existe uma conta com esse e-mail")
 	ErrInvalidCredentials  = errors.New("E-mail ou senha incorretos")
+	ErrMissingToken        = errors.New("Faça login para continuar")
+	ErrInvalidToken        = errors.New("Sessão inválida ou expirada. Entre novamente")
 )

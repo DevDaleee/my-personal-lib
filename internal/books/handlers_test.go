@@ -53,12 +53,12 @@ func (f *fakeService) GetBookByStatus(ctx context.Context, userID pgtype.UUID, s
 }
 
 // newTestRouter monta o mesmo caminho do api.go (middleware + rota),
-// para o teste cobrir também o cabeçalho X-User-ID e o {id} da URL.
+// para o teste cobrir também o token (Authorization) e o {id} da URL.
 func newTestRouter(svc BooksServices) http.Handler {
 	h := NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/books", func(r chi.Router) {
-		r.Use(userctx.Middleware)
+		r.Use(userctx.Middleware(testSecret))
 		r.Patch("/{id}/progress", h.UpdateBookProgress)
 	})
 	return r
@@ -75,7 +75,7 @@ func TestUpdateBookProgress(t *testing.T) {
 
 		// requisição
 		path   string
-		userID string // vazio = sem o cabeçalho X-User-ID
+		userID string // vazio = sem o cabeçalho Authorization (sem login)
 		body   string
 
 		// o que o serviço falso devolve
@@ -161,12 +161,12 @@ func TestUpdateBookProgress(t *testing.T) {
 			wantSvcCalled: false,
 		},
 		{
-			name:          "sem o cabeçalho X-User-ID devolve 400",
+			name:          "sem token (não logado) devolve 401",
 			path:          "/books/" + bookID + "/progress",
 			userID:        "",
 			body:          `{"current_page": 10}`,
-			wantStatus:    http.StatusBadRequest,
-			wantError:     messages.ErrHeaderField.Error(),
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrMissingToken.Error(),
 			wantSvcCalled: false,
 		},
 	}
@@ -179,7 +179,7 @@ func TestUpdateBookProgress(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPatch, tt.path, strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			if tt.userID != "" {
-				req.Header.Set(userctx.HeaderName, tt.userID)
+				req.Header.Set("Authorization", bearer(t, tt.userID))
 			}
 			rec := httptest.NewRecorder()
 

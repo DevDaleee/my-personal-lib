@@ -41,7 +41,7 @@ func (app *application) mount() http.Handler {
 	bookService := books.NewService(repo.New(app.db), app.db, app.js)
 	bookHandler := books.NewHandler(bookService)
 	r.Route("/books", func(r chi.Router) {
-		r.Use(userctx.Middleware)
+		r.Use(userctx.Middleware(app.config.jwt))
 		r.Post("/", bookHandler.CreateBook)
 		r.Get("/{id}", bookHandler.GetBookByID)
 		r.Get("/", bookHandler.GetBookByStatus)

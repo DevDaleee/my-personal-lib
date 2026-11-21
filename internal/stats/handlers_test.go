@@ -65,12 +65,12 @@ func (f *fakeService) GetStatsStreak(ctx context.Context, userID pgtype.UUID) (i
 }
 
 // newTestRouter monta o mesmo caminho do cmd/stats/api.go (middleware + rota),
-// para o teste cobrir também o cabeçalho X-User-ID.
+// para o teste cobrir também o token (Authorization).
 func newTestRouter(svc StatsServices) http.Handler {
 	h := NewHandler(svc)
 	r := chi.NewRouter()
 	r.Route("/stats", func(r chi.Router) {
-		r.Use(userctx.Middleware)
+		r.Use(userctx.Middleware(testSecret))
 		r.Get("/daily", h.GetStatsDaily)
 		r.Get("/monthly", h.GetStatsMonthly)
 		r.Get("/streak", h.GetStatsStreak)
@@ -96,7 +96,7 @@ func TestGetStatsDaily(t *testing.T) {
 
 		// requisição
 		query  string // o que vem depois de /stats/daily
-		userID string // vazio = sem o cabeçalho X-User-ID
+		userID string // vazio = sem o cabeçalho Authorization (sem login)
 
 		// o que o serviço falso devolve
 		svcRows []repo.ListDailyStatsRow
@@ -178,11 +178,11 @@ func TestGetStatsDaily(t *testing.T) {
 			wantDays:      7,
 		},
 		{
-			name:          "sem o cabeçalho X-User-ID devolve 400",
+			name:          "sem token (não logado) devolve 401",
 			query:         "",
 			userID:        "",
-			wantStatus:    http.StatusBadRequest,
-			wantError:     messages.ErrHeaderField.Error(),
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrMissingToken.Error(),
 			wantSvcCalled: false,
 		},
 	}
@@ -194,7 +194,7 @@ func TestGetStatsDaily(t *testing.T) {
 			// httptest cria a requisição e grava a resposta em memória, sem abrir porta.
 			req := httptest.NewRequest(http.MethodGet, "/stats/daily"+tt.query, nil)
 			if tt.userID != "" {
-				req.Header.Set(userctx.HeaderName, tt.userID)
+				req.Header.Set("Authorization", bearer(t, tt.userID))
 			}
 			rec := httptest.NewRecorder()
 
@@ -269,7 +269,7 @@ func TestGetStatsMonthly(t *testing.T) {
 
 		// requisição
 		query  string // o que vem depois de /stats/monthly
-		userID string // vazio = sem o cabeçalho X-User-ID
+		userID string // vazio = sem o cabeçalho Authorization (sem login)
 
 		// o que o serviço falso devolve
 		svcRows []repo.ListMonthlyFinishedRow
@@ -351,11 +351,11 @@ func TestGetStatsMonthly(t *testing.T) {
 			wantMonths:    12,
 		},
 		{
-			name:          "sem o cabeçalho X-User-ID devolve 400",
+			name:          "sem token (não logado) devolve 401",
 			query:         "",
 			userID:        "",
-			wantStatus:    http.StatusBadRequest,
-			wantError:     messages.ErrHeaderField.Error(),
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrMissingToken.Error(),
 			wantSvcCalled: false,
 		},
 	}
@@ -366,7 +366,7 @@ func TestGetStatsMonthly(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodGet, "/stats/monthly"+tt.query, nil)
 			if tt.userID != "" {
-				req.Header.Set(userctx.HeaderName, tt.userID)
+				req.Header.Set("Authorization", bearer(t, tt.userID))
 			}
 			rec := httptest.NewRecorder()
 
@@ -432,7 +432,7 @@ func TestGetStatsStreak(t *testing.T) {
 		name string
 
 		// requisição
-		userID string // vazio = sem o cabeçalho X-User-ID
+		userID string // vazio = sem o cabeçalho Authorization (sem login)
 
 		// o que o serviço falso devolve
 		svcStreak int
@@ -469,10 +469,10 @@ func TestGetStatsStreak(t *testing.T) {
 			wantSvcCalled: true,
 		},
 		{
-			name:          "sem o cabeçalho X-User-ID devolve 400",
+			name:          "sem token (não logado) devolve 401",
 			userID:        "",
-			wantStatus:    http.StatusBadRequest,
-			wantError:     messages.ErrHeaderField.Error(),
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrMissingToken.Error(),
 			wantSvcCalled: false,
 		},
 	}
@@ -483,7 +483,7 @@ func TestGetStatsStreak(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodGet, "/stats/streak", nil)
 			if tt.userID != "" {
-				req.Header.Set(userctx.HeaderName, tt.userID)
+				req.Header.Set("Authorization", bearer(t, tt.userID))
 			}
 			rec := httptest.NewRecorder()
 

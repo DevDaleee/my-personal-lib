@@ -39,7 +39,7 @@ func (app *application) mount() http.Handler {
 	statsService := stats.NewService(statsrepo.New(app.db), app.db, app.loc)
 	statsHandler := stats.NewHandler(statsService)
 	r.Route("/stats", func(r chi.Router) {
-		r.Use(userctx.Middleware)
+		r.Use(userctx.Middleware(app.config.jwtSecret))
 		r.Get("/daily", statsHandler.GetStatsDaily)
 		r.Get("/monthly", statsHandler.GetStatsMonthly)
 		r.Get("/streak", statsHandler.GetStatsStreak)
@@ -67,8 +67,9 @@ type application struct {
 	loc    *time.Location
 }
 type config struct {
-	addr string
-	db   dbConfig
+	addr      string
+	db        dbConfig
+	jwtSecret []byte
 }
 type dbConfig struct {
 	dsn string
