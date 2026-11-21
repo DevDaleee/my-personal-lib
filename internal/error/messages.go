@@ -24,4 +24,7 @@ var (
 	ErrInvalidPage         = errors.New("A página atual deve estar entre 0 e o total de páginas")
 	ErrInvalidDays         = errors.New("Período inválido: Use 7, 15 ou 30")
 	ErrInvalidMonthly      = errors.New("Período inválido: Use 2, 3, 6 ou 12")
+	ErrInvalidEmail        = errors.New("E-mail inválido")
+	ErrWeakPassword        = errors.New("A senha deve ter entre 8 e 72 caracteres")
+	ErrEmailTaken          = errors.New("Já existe uma conta com esse e-mail")
 )
