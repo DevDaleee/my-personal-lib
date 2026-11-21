@@ -27,11 +27,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	jwtSecret, err := env.GetRequired("JWT_SECRET")
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
+	if len(jwtSecret) < 32 {
+		slog.Error("JWT_SECRET must have at least 32 characters")
+		os.Exit(1)
+	}
+
 	cfg := config{
 		addr: env.GetString("PORT", ":9090"),
 		db: dbConfig{
 			dsn: dsn,
 		},
+		jwt: []byte(jwtSecret),
 	}
 
 	conn, err := pgxpool.New(ctx, cfg.db.dsn)

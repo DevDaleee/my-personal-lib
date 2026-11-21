@@ -112,6 +112,7 @@ services:
       # é o nome do serviço (books-postgres, nats), e não localhost.
       GOOSE_DBSTRING: host=books-postgres user=${BOOKS_DB_USER} password=${BOOKS_DB_PASS} dbname=${BOOKS_DB_NAME} sslmode=disable
       NATS_URL: nats://nats:4222
+      JWT_SECRET: ${JWT_SECRET}
     depends_on:
       books-postgres:
         # Só sobe o books depois que o healthcheck do postgres passar...

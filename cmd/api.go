@@ -78,6 +78,7 @@ type application struct {
 type config struct {
 	addr string
 	db   dbConfig
+	jwt  []byte
 }
 type dbConfig struct {
 	dsn string
