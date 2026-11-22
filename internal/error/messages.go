@@ -30,4 +30,5 @@ var (
 	ErrInvalidCredentials  = errors.New("E-mail ou senha incorretos")
 	ErrMissingToken        = errors.New("Faça login para continuar")
 	ErrInvalidToken        = errors.New("Sessão inválida ou expirada. Entre novamente")
+	ErrMissingName         = errors.New("Nome vazio")
 )

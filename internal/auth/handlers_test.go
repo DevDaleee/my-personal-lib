@@ -20,27 +20,30 @@ import (
 // fakeService implementa AuthService sem banco: devolve o que o teste mandar
 // e registra com quais valores foi chamado.
 type fakeService struct {
-	user  repo.CreateUserRow
-	token string
-	err   error
+	user   repo.CreateUserRow
+	token  string
+	userID pgtype.UUID
+	err    error
 
 	called      bool
 	gotEmail    string
 	gotPassword string
+	gotName     string
 }
 
-func (f *fakeService) Register(ctx context.Context, email string, password string) (repo.CreateUserRow, error) {
+func (f *fakeService) Register(ctx context.Context, email string, password string, name string) (repo.CreateUserRow, error) {
 	f.called = true
 	f.gotEmail = email
 	f.gotPassword = password
+	f.gotName = name
 	return f.user, f.err
 }
 
-func (f *fakeService) Login(ctx context.Context, email string, password string) (string, error) {
+func (f *fakeService) Login(ctx context.Context, email string, password string) (string, pgtype.UUID, error) {
 	f.called = true
 	f.gotEmail = email
 	f.gotPassword = password
-	return f.token, f.err
+	return f.token, f.userID, f.err
 }
 
 // newTestRouter monta o mesmo caminho do cmd/api.go: /auth/register sem middleware.
@@ -59,7 +62,7 @@ func TestRegister(t *testing.T) {
 	if err := userID.Scan("3d8be433-19f8-4963-b427-61e203353630"); err != nil {
 		t.Fatal(err)
 	}
-	created := repo.CreateUserRow{ID: userID, Email: "ana@example.com"}
+	created := repo.CreateUserRow{ID: userID, Email: "ana@example.com", Name: "Ana"}
 
 	tests := []struct {
 		name string
@@ -74,8 +77,8 @@ func TestRegister(t *testing.T) {
 		wantSvcCalled bool
 	}{
 		{
-			name:          "cadastro novo devolve 201 com id e email",
-			body:          `{"email": "ana@example.com", "password": "senha-forte-1"}`,
+			name:          "cadastro novo devolve 201 com id, email e nome",
+			body:          `{"email": "ana@example.com", "password": "senha-forte-1", "name": "Ana"}`,
 			svcUser:       created,
 			wantStatus:    http.StatusCreated,
 			wantSvcCalled: true,
@@ -94,6 +97,22 @@ func TestRegister(t *testing.T) {
 			svcErr:        messages.ErrWeakPassword,
 			wantStatus:    http.StatusBadRequest,
 			wantError:     messages.ErrWeakPassword.Error(),
+			wantSvcCalled: true,
+		},
+		{
+			name:          "nome vazio devolve 400",
+			body:          `{"email": "ana@example.com", "password": "senha-forte-1", "name": "   "}`,
+			svcErr:        messages.ErrMissingName,
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrMissingName.Error(),
+			wantSvcCalled: true,
+		},
+		{
+			name:          "sem o campo name o service recebe nome vazio (e recusa com 400)",
+			body:          `{"email": "ana@example.com", "password": "senha-forte-1"}`,
+			svcErr:        messages.ErrMissingName,
+			wantStatus:    http.StatusBadRequest,
+			wantError:     messages.ErrMissingName.Error(),
 			wantSvcCalled: true,
 		},
 		{
@@ -163,9 +182,9 @@ func TestRegister(t *testing.T) {
 				return
 			}
 
-			// Sucesso: id e email, e NUNCA nada que pareça senha ou hash.
-			if body["email"] != "ana@example.com" || body["id"] == nil {
-				t.Errorf("resposta sem id/email: %v", body)
+			// Sucesso: id, email e nome, e NUNCA nada que pareça senha ou hash.
+			if body["email"] != "ana@example.com" || body["id"] == nil || body["name"] != "Ana" {
+				t.Errorf("resposta sem id/email/name: %v", body)
 			}
 			for _, k := range []string{"password", "password_hash"} {
 				if _, ok := body[k]; ok {
@@ -175,29 +194,40 @@ func TestRegister(t *testing.T) {
 			if svc.gotPassword != "senha-forte-1" {
 				t.Errorf("senha repassada ao service = %q", svc.gotPassword)
 			}
+			if svc.gotName != "Ana" {
+				t.Errorf("nome repassado ao service = %q", svc.gotName)
+			}
 		})
 	}
 }
 
 func TestLogin(t *testing.T) {
 	const fakeToken = "aaa.bbb.ccc"
+	const fakeUserID = "3d8be433-19f8-4963-b427-61e203353630"
+
+	var userID pgtype.UUID
+	if err := userID.Scan(fakeUserID); err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name string
 
 		body string
 
-		svcToken string
-		svcErr   error
+		svcToken  string
+		svcUserID pgtype.UUID
+		svcErr    error
 
 		wantStatus    int
 		wantError     string // vazio = resposta de sucesso
 		wantSvcCalled bool
 	}{
 		{
-			name:          "credenciais certas devolvem 200 com o token",
+			name:          "credenciais certas devolvem 200 com o token e o user_id",
 			body:          `{"email": "ana@example.com", "password": "senha-forte-1"}`,
 			svcToken:      fakeToken,
+			svcUserID:     userID,
 			wantStatus:    http.StatusOK,
 			wantSvcCalled: true,
 		},
@@ -235,7 +265,7 @@ func TestLogin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := &fakeService{token: tt.svcToken, err: tt.svcErr}
+			svc := &fakeService{token: tt.svcToken, userID: tt.svcUserID, err: tt.svcErr}
 
 			req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -264,15 +294,18 @@ func TestLogin(t *testing.T) {
 				if body["error"] != tt.wantError {
 					t.Errorf("error = %v, quero %q", body["error"], tt.wantError)
 				}
-				if _, ok := body["token"]; ok {
-					t.Errorf("resposta de erro não pode ter token: %v", body)
+				for _, k := range []string{"token", "user_id"} {
+					if _, ok := body[k]; ok {
+						t.Errorf("resposta de erro não pode ter o campo %q: %v", k, body)
+					}
 				}
 				return
 			}
 
-			// Sucesso: exatamente {"token": "..."}.
-			if body["token"] != fakeToken || len(body) != 1 {
-				t.Errorf("corpo = %v, quero só {\"token\": %q}", body, fakeToken)
+			// Sucesso: exatamente {"token": "...", "user_id": "..."}.
+			// O pgtype.UUID vira string no JSON (formato 8-4-4-4-12).
+			if body["token"] != fakeToken || body["user_id"] != fakeUserID || len(body) != 2 {
+				t.Errorf("corpo = %v, quero só {\"token\": %q, \"user_id\": %q}", body, fakeToken, fakeUserID)
 			}
 			if svc.gotEmail != "ana@example.com" || svc.gotPassword != "senha-forte-1" {
 				t.Errorf("repassado ao service: email=%q senha=%q", svc.gotEmail, svc.gotPassword)

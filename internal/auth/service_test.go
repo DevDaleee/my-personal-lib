@@ -19,17 +19,20 @@ func TestRegisterRejectsBeforeDatabase(t *testing.T) {
 		name     string
 		email    string
 		password string
+		userName string // nome da pessoa; "name" já é o nome do caso
 		wantErr  error
 	}{
-		{name: "e-mail vazio", email: "", password: "senha-forte-1", wantErr: messages.ErrInvalidEmail},
-		{name: "só espaços", email: "   ", password: "senha-forte-1", wantErr: messages.ErrInvalidEmail},
-		{name: "sem arroba", email: "ana.example.com", password: "senha-forte-1", wantErr: messages.ErrInvalidEmail},
-		{name: "sem domínio", email: "ana@", password: "senha-forte-1", wantErr: messages.ErrInvalidEmail},
-		{name: "sem usuário", email: "@example.com", password: "senha-forte-1", wantErr: messages.ErrInvalidEmail},
-		{name: "com nome de exibição", email: "Ana <ana@example.com>", password: "senha-forte-1", wantErr: messages.ErrInvalidEmail},
-		{name: "senha com 7 caracteres", email: "ana@example.com", password: "1234567", wantErr: messages.ErrWeakPassword},
-		{name: "senha vazia", email: "ana@example.com", password: "", wantErr: messages.ErrWeakPassword},
-		{name: "senha com 73 caracteres", email: "ana@example.com", password: strings.Repeat("a", 73), wantErr: messages.ErrWeakPassword},
+		{name: "e-mail vazio", email: "", password: "senha-forte-1", userName: "Ana", wantErr: messages.ErrInvalidEmail},
+		{name: "só espaços", email: "   ", password: "senha-forte-1", userName: "Ana", wantErr: messages.ErrInvalidEmail},
+		{name: "sem arroba", email: "ana.example.com", password: "senha-forte-1", userName: "Ana", wantErr: messages.ErrInvalidEmail},
+		{name: "sem domínio", email: "ana@", password: "senha-forte-1", userName: "Ana", wantErr: messages.ErrInvalidEmail},
+		{name: "sem usuário", email: "@example.com", password: "senha-forte-1", userName: "Ana", wantErr: messages.ErrInvalidEmail},
+		{name: "com nome de exibição", email: "Ana <ana@example.com>", password: "senha-forte-1", userName: "Ana", wantErr: messages.ErrInvalidEmail},
+		{name: "senha com 7 caracteres", email: "ana@example.com", password: "1234567", userName: "Ana", wantErr: messages.ErrWeakPassword},
+		{name: "senha vazia", email: "ana@example.com", password: "", userName: "Ana", wantErr: messages.ErrWeakPassword},
+		{name: "senha com 73 caracteres", email: "ana@example.com", password: strings.Repeat("a", 73), userName: "Ana", wantErr: messages.ErrWeakPassword},
+		{name: "nome vazio", email: "ana@example.com", password: "senha-forte-1", userName: "", wantErr: messages.ErrMissingName},
+		{name: "nome só com espaços", email: "ana@example.com", password: "senha-forte-1", userName: "  \t ", wantErr: messages.ErrMissingName},
 	}
 
 	for _, tt := range tests {
@@ -40,7 +43,7 @@ func TestRegisterRejectsBeforeDatabase(t *testing.T) {
 				}
 			}()
 
-			_, err := s.Register(context.Background(), tt.email, tt.password)
+			_, err := s.Register(context.Background(), tt.email, tt.password, tt.userName)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("erro = %v, quero %v", err, tt.wantErr)
 			}

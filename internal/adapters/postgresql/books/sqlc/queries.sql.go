@@ -110,19 +110,21 @@ func (q *Queries) CreateProgressUpdate(ctx context.Context, arg CreateProgressUp
 
 const createUser = `-- name: CreateUser :one
 
-INSERT INTO users (email, password_hash)
-VALUES ($1, $2)
-RETURNING id, email, created_at
+INSERT INTO users (email, password_hash, name)
+VALUES ($1, $2, $3)
+RETURNING id, email, name, created_at
 `
 
 type CreateUserParams struct {
 	Email        string `json:"email"`
 	PasswordHash string `json:"password_hash"`
+	Name         string `json:"name"`
 }
 
 type CreateUserRow struct {
 	ID        pgtype.UUID        `json:"id"`
 	Email     string             `json:"email"`
+	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -130,9 +132,14 @@ type CreateUserRow struct {
 // Cadastra a conta. O email chega já em minúsculas e a senha já como hash bcrypt.
 // E-mail repetido viola o UNIQUE (erro 23505 do Postgres): o Go traduz para 409.
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash)
+	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash, arg.Name)
 	var i CreateUserRow
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 

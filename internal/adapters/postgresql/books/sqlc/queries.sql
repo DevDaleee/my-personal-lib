@@ -90,9 +90,9 @@ RETURNING id, created_at;
 -- name: CreateUser :one
 -- Cadastra a conta. O email chega já em minúsculas e a senha já como hash bcrypt.
 -- E-mail repetido viola o UNIQUE (erro 23505 do Postgres): o Go traduz para 409.
-INSERT INTO users (email, password_hash)
-VALUES (@email, @password_hash)
-RETURNING id, email, created_at;
+INSERT INTO users (email, password_hash, name)
+VALUES (@email, @password_hash, @name)
+RETURNING id, email, name, created_at;
 
 -- name: GetUserByEmail :one
 -- Usado no login: traz o hash para o Go comparar com a senha digitada.
