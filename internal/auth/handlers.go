@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	messages "my-personal-lib/internal/error"
 	"my-personal-lib/internal/json"
+	"my-personal-lib/internal/userctx"
 	"net/http"
 )
 
@@ -61,4 +62,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.Write(w, http.StatusOK, loginResponse{Token: token, UserID: userID})
+}
+
+func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userctx.FromContext(r.Context())
+	if !ok {
+		slog.Error("Invalid User", "error", messages.ErrValidUser.Error(), "user_id", userID.String())
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+
+	user, err := h.service.GetMe(r.Context(), userID)
+	if err != nil {
+		if errors.Is(err, messages.ErrUserNotFound) {
+			slog.Error("user not found", "error", messages.ErrUserNotFound.Error(), "user_id", userID.String())
+			json.WriteError(w, http.StatusNotFound, messages.ErrUserNotFound.Error())
+			return
+		}
+		slog.Error("failed getting user", "error", err)
+		json.WriteError(w, http.StatusInternalServerError, messages.ErrInternalServerError.Error())
+		return
+	}
+	json.Write(w, http.StatusOK, user)
 }

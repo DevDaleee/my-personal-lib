@@ -54,6 +54,10 @@ func (app *application) mount() http.Handler {
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
 	})
+	r.Route("/users", func(r chi.Router) {
+		r.Use(userctx.Middleware(app.config.jwt))
+		r.Get("/me", authHandler.GetMe)
+	})
 
 	return r
 }

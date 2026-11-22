@@ -6,6 +6,8 @@ package repo
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -27,6 +29,10 @@ type Querier interface {
 	// Usado no login: traz o hash para o Go comparar com a senha digitada.
 	// Nenhuma linha (pgx.ErrNoRows) = e-mail não cadastrado → 401 genérico.
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
+	// Usado no GET /users/me: o id vem do token (middleware userctx).
+	// Nunca traz o password_hash, para ele não vazar na resposta por engano.
+	// Nenhuma linha (pgx.ErrNoRows) = usuário apagado com token ainda válido → 404.
+	GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error)
 	ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, error)
 	ListProgressUpdates(ctx context.Context, arg ListProgressUpdatesParams) ([]ProgressUpdate, error)
 	SetRating(ctx context.Context, arg SetRatingParams) (Book, error)

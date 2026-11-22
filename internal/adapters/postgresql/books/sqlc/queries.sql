@@ -100,3 +100,11 @@ RETURNING id, email, name, created_at;
 SELECT id, email, password_hash
 FROM users
 WHERE email = @email;
+
+-- name: GetUserByID :one
+-- Usado no GET /users/me: o id vem do token (middleware userctx).
+-- Nunca traz o password_hash, para ele não vazar na resposta por engano.
+-- Nenhuma linha (pgx.ErrNoRows) = usuário apagado com token ainda válido → 404.
+SELECT id, email, name, created_at
+FROM users
+WHERE id = @id;

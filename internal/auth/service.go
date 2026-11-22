@@ -109,7 +109,7 @@ func (s *svc) GetMe(ctx context.Context, userID pgtype.UUID) (repo.GetUserByIDRo
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return repo.GetUserByIDRow{}, messages.ErrNotFound
+			return repo.GetUserByIDRow{}, messages.ErrUserNotFound
 		}
 		return repo.GetUserByIDRow{}, fmt.Errorf("get user by id: %w", err)
 	}

@@ -254,6 +254,34 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 	return i, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, email, name, created_at
+FROM users
+WHERE id = $1
+`
+
+type GetUserByIDRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	Email     string             `json:"email"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// Usado no GET /users/me: o id vem do token (middleware userctx).
+// Nunca traz o password_hash, para ele não vazar na resposta por engano.
+// Nenhuma linha (pgx.ErrNoRows) = usuário apagado com token ainda válido → 404.
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listBooks = `-- name: ListBooks :many
 SELECT id, user_id, title, author, isbn, total_pages, current_page, status, rating, notes, cover_url, owned, started_at, finished_at, created_at, updated_at FROM books
 WHERE user_id = $1
