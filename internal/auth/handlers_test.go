@@ -9,12 +9,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
 	messages "my-personal-lib/internal/error"
+	"my-personal-lib/internal/userctx"
 )
 
 // fakeService implementa AuthService sem banco: devolve o que o teste mandar
@@ -319,5 +322,176 @@ func TestLogin(t *testing.T) {
 				t.Errorf("repassado ao service: email=%q senha=%q", svc.gotEmail, svc.gotPassword)
 			}
 		})
+	}
+}
+
+// newMeRouter monta o mesmo caminho do cmd/api.go: /users/me ATRÁS do middleware
+// de verdade (userctx), para o teste passar pelo mesmo fluxo de token da produção.
+func newMeRouter(svc AuthService, secret []byte) http.Handler {
+	h := NewHandler(svc)
+	r := chi.NewRouter()
+	r.Route("/users", func(r chi.Router) {
+		r.Use(userctx.Middleware(secret))
+		r.Get("/me", h.GetMe)
+	})
+	return r
+}
+
+// signToken gera um token igual ao do Login (HS256, user_id no "sub").
+func signToken(t *testing.T, secret []byte, sub string) string {
+	t.Helper()
+	claims := jwt.RegisteredClaims{
+		Subject:   sub,
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+	}
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signed
+}
+
+func TestGetMe(t *testing.T) {
+	secret := []byte("chave-de-teste-com-mais-de-32-caracteres")
+	const sub = "3d8be433-19f8-4963-b427-61e203353630"
+
+	var userID pgtype.UUID
+	if err := userID.Scan(sub); err != nil {
+		t.Fatal(err)
+	}
+	me := repo.GetUserByIDRow{
+		ID:        userID,
+		Email:     "ana@example.com",
+		Name:      "Ana",
+		CreatedAt: pgtype.Timestamptz{Time: time.Date(2024, 5, 10, 12, 0, 0, 0, time.UTC), Valid: true},
+	}
+
+	tests := []struct {
+		name string
+
+		authHeader string // cabeçalho Authorization; "" = sem cabeçalho
+
+		svcMe  repo.GetUserByIDRow
+		svcErr error
+
+		wantStatus    int
+		wantError     string // mensagem esperada no campo "error"; "" = sucesso
+		wantSvcCalled bool
+	}{
+		{
+			name:          "token válido devolve 200 com os dados do usuário",
+			authHeader:    "Bearer " + signToken(t, secret, sub),
+			svcMe:         me,
+			wantStatus:    http.StatusOK,
+			wantSvcCalled: true,
+		},
+		{
+			name:          "sem token devolve 401 sem chamar o service",
+			authHeader:    "",
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrMissingToken.Error(),
+			wantSvcCalled: false,
+		},
+		{
+			name:          "token assinado com outra chave devolve 401",
+			authHeader:    "Bearer " + signToken(t, []byte("outra-chave-com-mais-de-32-caracteres!!"), sub),
+			wantStatus:    http.StatusUnauthorized,
+			wantError:     messages.ErrInvalidToken.Error(),
+			wantSvcCalled: false,
+		},
+		{
+			name:          "usuário do token não existe mais devolve 404",
+			authHeader:    "Bearer " + signToken(t, secret, sub),
+			svcErr:        messages.ErrUserNotFound,
+			wantStatus:    http.StatusNotFound,
+			wantError:     messages.ErrUserNotFound.Error(),
+			wantSvcCalled: true,
+		},
+		{
+			// O erro interno (em inglês, do banco) nunca pode chegar ao app.
+			name:          "erro inesperado devolve 500 com mensagem genérica",
+			authHeader:    "Bearer " + signToken(t, secret, sub),
+			svcErr:        errors.New("get user by id: connection refused"),
+			wantStatus:    http.StatusInternalServerError,
+			wantError:     messages.ErrInternalServerError.Error(),
+			wantSvcCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &fakeService{me: tt.svcMe, err: tt.svcErr}
+
+			req := httptest.NewRequest(http.MethodGet, "/users/me", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			rec := httptest.NewRecorder()
+
+			newMeRouter(svc, secret).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, quero %d (corpo: %s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+			if svc.called != tt.wantSvcCalled {
+				t.Fatalf("service chamado = %v, quero %v", svc.called, tt.wantSvcCalled)
+			}
+
+			// Um objeto JSON só: pega o caso de um return esquecido depois do erro.
+			dec := json.NewDecoder(bytes.NewReader(rec.Body.Bytes()))
+			var body map[string]any
+			if err := dec.Decode(&body); err != nil {
+				t.Fatalf("corpo não é JSON válido: %v (corpo: %s)", err, rec.Body.String())
+			}
+			if dec.More() {
+				t.Fatalf("o handler escreveu mais de uma resposta no corpo: %s", rec.Body.String())
+			}
+
+			if tt.wantError != "" {
+				if body["error"] != tt.wantError {
+					t.Errorf("error = %v, quero %q", body["error"], tt.wantError)
+				}
+				return
+			}
+
+			// Sucesso: o service recebeu o id do token (e não de outro lugar).
+			if svc.gotUserID != userID {
+				t.Errorf("user_id repassado ao service = %v, quero %v", svc.gotUserID.String(), sub)
+			}
+			// Campos em snake_case, como o app espera.
+			want := map[string]any{
+				"id":         sub,
+				"email":      "ana@example.com",
+				"name":       "Ana",
+				"created_at": "2024-05-10T12:00:00Z",
+			}
+			for k, v := range want {
+				if body[k] != v {
+					t.Errorf("%s = %v, quero %v", k, body[k], v)
+				}
+			}
+			for _, k := range []string{"password", "password_hash"} {
+				if _, ok := body[k]; ok {
+					t.Errorf("a resposta não pode ter o campo %q: %v", k, body)
+				}
+			}
+		})
+	}
+}
+
+// Se a rota for registrada sem o middleware (o bug que já aconteceu no cmd/api.go),
+// não há user_id no context: o handler responde 500 e não chama o service.
+func TestGetMeWithoutMiddleware(t *testing.T) {
+	svc := &fakeService{}
+	req := httptest.NewRequest(http.MethodGet, "/users/me", nil)
+	rec := httptest.NewRecorder()
+
+	NewHandler(svc).GetMe(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, quero %d", rec.Code, http.StatusInternalServerError)
+	}
+	if svc.called {
+		t.Fatal("o service não deveria ser chamado sem user_id no context")
 	}
 }
