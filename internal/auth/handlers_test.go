@@ -21,6 +21,7 @@ import (
 // e registra com quais valores foi chamado.
 type fakeService struct {
 	user   repo.CreateUserRow
+	me     repo.GetUserByIDRow
 	token  string
 	userID pgtype.UUID
 	err    error
@@ -29,6 +30,7 @@ type fakeService struct {
 	gotEmail    string
 	gotPassword string
 	gotName     string
+	gotUserID   pgtype.UUID
 }
 
 func (f *fakeService) Register(ctx context.Context, email string, password string, name string) (repo.CreateUserRow, error) {
@@ -44,6 +46,12 @@ func (f *fakeService) Login(ctx context.Context, email string, password string) 
 	f.gotEmail = email
 	f.gotPassword = password
 	return f.token, f.userID, f.err
+}
+
+func (f *fakeService) GetMe(ctx context.Context, userID pgtype.UUID) (repo.GetUserByIDRow, error) {
+	f.called = true
+	f.gotUserID = userID
+	return f.me, f.err
 }
 
 // newTestRouter monta o mesmo caminho do cmd/api.go: /auth/register sem middleware.

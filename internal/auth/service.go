@@ -20,6 +20,7 @@ import (
 type AuthService interface {
 	Register(ctx context.Context, email string, password string, name string) (repo.CreateUserRow, error)
 	Login(ctx context.Context, email string, password string) (string, pgtype.UUID, error)
+	GetMe(ctx context.Context, userID pgtype.UUID) (repo.GetUserByIDRow, error)
 }
 
 type svc struct {
@@ -98,4 +99,19 @@ func (s *svc) Login(ctx context.Context, email string, password string) (string,
 	}
 
 	return signed, user.ID, nil
+}
+
+func (s *svc) GetMe(ctx context.Context, userID pgtype.UUID) (repo.GetUserByIDRow, error) {
+	if !userID.Valid {
+		return repo.GetUserByIDRow{}, messages.ErrValidUser
+	}
+
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return repo.GetUserByIDRow{}, messages.ErrNotFound
+		}
+		return repo.GetUserByIDRow{}, fmt.Errorf("get user by id: %w", err)
+	}
+	return user, nil
 }
