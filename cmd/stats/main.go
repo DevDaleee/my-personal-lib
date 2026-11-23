@@ -17,6 +17,14 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// @title My-Personal-Bib - Stats-service
+// @version 1.0
+// @description Estatísticas de leitura: páginas por dia, livros concluídos por mês e sequência de dias lendo.
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Digite: Bearer <seu token>
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)

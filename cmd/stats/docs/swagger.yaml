@@ -1,0 +1,158 @@
+basePath: /
+definitions:
+  stats.StreakResponse:
+    properties:
+      current_streak:
+        type: integer
+    type: object
+  statsrepo.ListDailyStatsRow:
+    properties:
+      day:
+        type: string
+      pages_read:
+        type: integer
+      updates:
+        type: integer
+    type: object
+  statsrepo.ListMonthlyFinishedRow:
+    properties:
+      finished_count:
+        type: integer
+      month:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: 'Estatísticas de leitura: páginas por dia, livros concluídos por mês
+    e sequência de dias lendo.'
+  title: My-Personal-Bib - Stats-service
+  version: "1.0"
+paths:
+  /stats/daily:
+    get:
+      description: Páginas lidas por dia nos últimos N dias (America/Sao_Paulo). Dias
+        sem leitura não aparecem.
+      parameters:
+      - default: 7
+        description: Período em dias
+        enum:
+        - 7
+        - 15
+        - 30
+        in: query
+        name: days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/statsrepo.ListDailyStatsRow'
+            type: array
+        "400":
+          description: Período inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Páginas por dia
+      tags:
+      - stats
+  /stats/monthly:
+    get:
+      description: 'Livros concluídos por mês nos últimos N meses: 2 (bimestral),
+        3 (trimestral), 6 (semestral) ou 12 (anual). Meses sem livro não aparecem.'
+      parameters:
+      - default: 12
+        description: Período em meses
+        enum:
+        - 2
+        - 3
+        - 6
+        - 12
+        in: query
+        name: months
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/statsrepo.ListMonthlyFinishedRow'
+            type: array
+        "400":
+          description: Período inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Livros concluídos por mês
+      tags:
+      - stats
+  /stats/streak:
+    get:
+      description: Quantos dias seguidos, até hoje (America/Sao_Paulo), o usuário
+        registrou leitura.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/stats.StreakResponse'
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Sequência de dias lendo
+      tags:
+      - stats
+securityDefinitions:
+  BearerAuth:
+    description: 'Digite: Bearer <seu token>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
