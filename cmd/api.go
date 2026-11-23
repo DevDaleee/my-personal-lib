@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	_ "my-personal-lib/cmd/docs" // registra o spec gerado pelo swag (o import roda o init() do pacote)
 	repo "my-personal-lib/internal/adapters/postgresql/books/sqlc"
 	"my-personal-lib/internal/auth"
 	"my-personal-lib/internal/books"
@@ -15,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go/jetstream"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 func (app *application) mount() http.Handler {
@@ -37,6 +39,10 @@ func (app *application) mount() http.Handler {
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("All good"))
 	})
+
+	// Documentação Swagger (gerada pelo "swag init" em cmd/docs). Fica fora do
+	// middleware JWT, como o /health. Abrir em /swagger/index.html.
+	r.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	bookService := books.NewService(repo.New(app.db), app.db, app.js)
 	bookHandler := books.NewHandler(bookService)

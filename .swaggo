@@ -1,0 +1,8 @@
+// Substituições de tipo para o swag (lido automaticamente pelo "swag init" rodado na raiz).
+// Os tipos pgtype viram, no JSON, valores simples (string, número ou null).
+// Sem isto, o swag documentaria a struct interna (Bytes, Valid...), que não é o que a API devolve.
+replace github.com/jackc/pgx/v5/pgtype.UUID string
+replace github.com/jackc/pgx/v5/pgtype.Text string
+replace github.com/jackc/pgx/v5/pgtype.Int4 integer
+replace github.com/jackc/pgx/v5/pgtype.Timestamptz string
+replace github.com/jackc/pgx/v5/pgtype.Date string

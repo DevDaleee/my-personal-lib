@@ -14,6 +14,14 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
+// @title My-Personal-Bib - Books-service
+// @version 1.0
+// @description Swagger do serviço books-service
+// @BasePath /
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Digite: Bearer <seu token>
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)

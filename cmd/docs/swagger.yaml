@@ -1,0 +1,429 @@
+basePath: /
+definitions:
+  auth.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  auth.loginResponse:
+    properties:
+      token:
+        type: string
+      user_id:
+        type: string
+    type: object
+  auth.registerRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  books.bookItems:
+    properties:
+      author:
+        type: string
+      cover_url:
+        type: string
+      isbn:
+        type: string
+      notes:
+        type: string
+      owned:
+        type: boolean
+      rating:
+        type: integer
+      title:
+        type: string
+      total_pages:
+        type: integer
+    type: object
+  books.updateBookItem:
+    properties:
+      current_page:
+        type: integer
+    type: object
+  repo.Book:
+    properties:
+      author:
+        type: string
+      cover_url:
+        type: string
+      created_at:
+        type: string
+      current_page:
+        type: integer
+      finished_at:
+        type: string
+      id:
+        type: string
+      isbn:
+        type: string
+      notes:
+        type: string
+      owned:
+        type: boolean
+      rating:
+        type: integer
+      started_at:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      total_pages:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  repo.CreateUserRow:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  repo.GetUserByIDRow:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Swagger do serviço books-service
+  title: My-Personal-Bib - Books-service
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Confere e-mail e senha e devolve o token JWT, que vai no cabeçalho
+        Authorization das rotas protegidas.
+      parameters:
+      - description: E-mail e senha
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.loginResponse'
+        "400":
+          description: JSON inválido ou campo faltando
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: E-mail ou senha incorretos
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Entrar
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Cria um usuário com nome, e-mail e senha. A senha é guardada só
+        como hash bcrypt.
+      parameters:
+      - description: Nome, e-mail e senha
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/auth.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/repo.CreateUserRow'
+        "400":
+          description: JSON inválido, campo faltando, e-mail inválido ou senha fraca
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: E-mail já cadastrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Criar conta
+      tags:
+      - auth
+  /books:
+    get:
+      description: Lista os livros do usuário do token. Sem o parâmetro status, devolve
+        todos.
+      parameters:
+      - description: Filtrar por status
+        enum:
+        - wanna_read
+        - reading
+        - read
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repo.Book'
+            type: array
+        "400":
+          description: Status inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Listar livros
+      tags:
+      - books
+    post:
+      consumes:
+      - application/json
+      description: Cadastra um livro na biblioteca pessoal do usuário do token. isbn,
+        rating, notes e cover_url são opcionais.
+      parameters:
+      - description: Dados do livro
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/books.bookItems'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/repo.Book'
+        "400":
+          description: JSON inválido ou campo inválido (título, autor, páginas, nota)
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: ISBN já cadastrado para este usuário
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cadastrar livro
+      tags:
+      - books
+  /books/{id}:
+    get:
+      description: Devolve um livro do usuário do token. Livro de outro usuário responde
+        404.
+      parameters:
+      - description: ID do livro (UUID)
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Book'
+        "400":
+          description: ID inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Livro não encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Detalhe do livro
+      tags:
+      - books
+  /books/{id}/progress:
+    patch:
+      consumes:
+      - application/json
+      description: 'Atualiza a página atual (o status muda sozinho: reading ou read)
+        e publica o evento ReadingProgressUpdated no NATS.'
+      parameters:
+      - description: ID do livro (UUID)
+        format: uuid
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Nova página atual
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/books.updateBookItem'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Book'
+        "400":
+          description: JSON inválido, ID inválido ou página fora do intervalo
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Livro não encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Atualizar progresso
+      tags:
+      - books
+  /users/me:
+    get:
+      description: Devolve id, nome, e-mail e data de cadastro do usuário do token.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.GetUserByIDRow'
+        "401":
+          description: Token ausente, inválido ou vencido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Usuário não encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Meu perfil
+      tags:
+      - users
+securityDefinitions:
+  BearerAuth:
+    description: 'Digite: Bearer <seu token>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -26,6 +26,22 @@ func NewHandler(service BooksServices) *BookHandler {
 	}
 }
 
+// UpdateBookProgress atualiza a página atual e publica o evento ReadingProgressUpdated.
+//
+// @Summary Atualizar progresso
+// @Description Atualiza a página atual (o status muda sozinho: reading ou read) e publica o evento ReadingProgressUpdated no NATS.
+// @Tags books
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "ID do livro (UUID)" format(uuid)
+// @Param body body updateBookItem true "Nova página atual"
+// @Success 200 {object} repo.Book
+// @Failure 400 {object} map[string]string "JSON inválido, ID inválido ou página fora do intervalo"
+// @Failure 401 {object} map[string]string "Token ausente, inválido ou vencido"
+// @Failure 404 {object} map[string]string "Livro não encontrado"
+// @Failure 500 {object} map[string]string
+// @Router /books/{id}/progress [patch]
 func (h *BookHandler) UpdateBookProgress(w http.ResponseWriter, r *http.Request) {
 	var tempBook updateBookItem
 	if err := json.Read(r, &tempBook); err != nil {
@@ -67,6 +83,19 @@ func (h *BookHandler) UpdateBookProgress(w http.ResponseWriter, r *http.Request)
 	json.Write(w, http.StatusOK, book)
 }
 
+// GetBookByStatus lista os livros do usuário, com filtro opcional por status.
+//
+// @Summary Listar livros
+// @Description Lista os livros do usuário do token. Sem o parâmetro status, devolve todos.
+// @Tags books
+// @Produce json
+// @Security BearerAuth
+// @Param status query string false "Filtrar por status" Enums(wanna_read, reading, read)
+// @Success 200 {array} repo.Book
+// @Failure 400 {object} map[string]string "Status inválido"
+// @Failure 401 {object} map[string]string "Token ausente, inválido ou vencido"
+// @Failure 500 {object} map[string]string
+// @Router /books [get]
 func (h *BookHandler) GetBookByStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
@@ -94,6 +123,20 @@ func (h *BookHandler) GetBookByStatus(w http.ResponseWriter, r *http.Request) {
 	json.Write(w, http.StatusOK, book)
 }
 
+// GetBookByID devolve um livro do usuário.
+//
+// @Summary Detalhe do livro
+// @Description Devolve um livro do usuário do token. Livro de outro usuário responde 404.
+// @Tags books
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "ID do livro (UUID)" format(uuid)
+// @Success 200 {object} repo.Book
+// @Failure 400 {object} map[string]string "ID inválido"
+// @Failure 401 {object} map[string]string "Token ausente, inválido ou vencido"
+// @Failure 404 {object} map[string]string "Livro não encontrado"
+// @Failure 500 {object} map[string]string
+// @Router /books/{id} [get]
 func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	userID, ok := userctx.FromContext(r.Context())
 	if !ok {
@@ -123,6 +166,21 @@ func (h *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	json.Write(w, http.StatusOK, book)
 }
 
+// CreateBook cadastra um livro na biblioteca do usuário.
+//
+// @Summary Cadastrar livro
+// @Description Cadastra um livro na biblioteca pessoal do usuário do token. isbn, rating, notes e cover_url são opcionais.
+// @Tags books
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body bookItems true "Dados do livro"
+// @Success 201 {object} repo.Book
+// @Failure 400 {object} map[string]string "JSON inválido ou campo inválido (título, autor, páginas, nota)"
+// @Failure 401 {object} map[string]string "Token ausente, inválido ou vencido"
+// @Failure 409 {object} map[string]string "ISBN já cadastrado para este usuário"
+// @Failure 500 {object} map[string]string
+// @Router /books [post]
 func (h *BookHandler) CreateBook(w http.ResponseWriter, r *http.Request) {
 	var tempBook bookItems
 	if err := json.Read(r, &tempBook); err != nil {
