@@ -4,3 +4,6 @@
 CLAUDE.md
 /.claude
 design.md
+
+# Task definition do ECS com os segredos de verdade (o modelo é o .example.json)
+ecs-task-definition.json

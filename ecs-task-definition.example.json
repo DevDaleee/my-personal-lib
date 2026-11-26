@@ -1,0 +1,194 @@
+{
+  "family": "mpl",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX",
+    "cpuArchitecture": "ARM64"
+  },
+  "executionRoleArn": "arn:aws:iam::926705662316:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "books-postgres",
+      "image": "public.ecr.aws/docker/library/postgres:16-alpine",
+      "essential": true,
+      "environment": [
+        { "name": "POSTGRES_USER", "value": "books" },
+        { "name": "POSTGRES_PASSWORD", "value": "TROQUE-SENHA-BOOKS" },
+        { "name": "POSTGRES_DB", "value": "books_db" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"],
+        "interval": 5,
+        "timeout": 3,
+        "retries": 10,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "books-postgres"
+        }
+      }
+    },
+    {
+      "name": "stats-postgres",
+      "image": "public.ecr.aws/docker/library/postgres:16-alpine",
+      "essential": true,
+      "environment": [
+        { "name": "POSTGRES_USER", "value": "stats" },
+        { "name": "POSTGRES_PASSWORD", "value": "TROQUE-SENHA-STATS" },
+        { "name": "POSTGRES_DB", "value": "stats_db" },
+        { "name": "PGPORT", "value": "5433" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"],
+        "interval": 5,
+        "timeout": 3,
+        "retries": 10,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "stats-postgres"
+        }
+      }
+    },
+    {
+      "name": "migrate-books",
+      "image": "926705662316.dkr.ecr.us-east-2.amazonaws.com/mpl-migrate:v1",
+      "essential": false,
+      "environment": [
+        { "name": "GOOSE_DRIVER", "value": "postgres" },
+        { "name": "GOOSE_DBSTRING", "value": "host=localhost port=5432 user=books password=TROQUE-SENHA-BOOKS dbname=books_db sslmode=disable" },
+        { "name": "GOOSE_MIGRATION_DIR", "value": "/migrations/books" }
+      ],
+      "dependsOn": [
+        { "containerName": "books-postgres", "condition": "HEALTHY" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "migrate-books"
+        }
+      }
+    },
+    {
+      "name": "migrate-stats",
+      "image": "926705662316.dkr.ecr.us-east-2.amazonaws.com/mpl-migrate:v1",
+      "essential": false,
+      "environment": [
+        { "name": "GOOSE_DRIVER", "value": "postgres" },
+        { "name": "GOOSE_DBSTRING", "value": "host=localhost port=5433 user=stats password=TROQUE-SENHA-STATS dbname=stats_db sslmode=disable" },
+        { "name": "GOOSE_MIGRATION_DIR", "value": "/migrations/stats" }
+      ],
+      "dependsOn": [
+        { "containerName": "stats-postgres", "condition": "HEALTHY" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "migrate-stats"
+        }
+      }
+    },
+    {
+      "name": "nats",
+      "image": "public.ecr.aws/docker/library/nats:2.10-alpine",
+      "essential": true,
+      "command": ["-js", "-m", "8222"],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -q -O - http://localhost:8222/healthz || exit 1"],
+        "interval": 5,
+        "timeout": 3,
+        "retries": 10,
+        "startPeriod": 5
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "nats"
+        }
+      }
+    },
+    {
+      "name": "books",
+      "image": "926705662316.dkr.ecr.us-east-2.amazonaws.com/mpl-books:v1",
+      "essential": true,
+      "environment": [
+        { "name": "GOOSE_DBSTRING", "value": "host=localhost port=5432 user=books password=TROQUE-SENHA-BOOKS dbname=books_db sslmode=disable" },
+        { "name": "NATS_URL", "value": "nats://localhost:4222" },
+        { "name": "JWT_SECRET", "value": "TROQUE-JWT-SECRET" },
+        { "name": "PORT", "value": ":9090" }
+      ],
+      "dependsOn": [
+        { "containerName": "migrate-books", "condition": "SUCCESS" },
+        { "containerName": "nats", "condition": "HEALTHY" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "books"
+        }
+      }
+    },
+    {
+      "name": "stats",
+      "image": "926705662316.dkr.ecr.us-east-2.amazonaws.com/mpl-stats:v1",
+      "essential": true,
+      "environment": [
+        { "name": "STATS_DBSTRING", "value": "host=localhost port=5433 user=stats password=TROQUE-SENHA-STATS dbname=stats_db sslmode=disable" },
+        { "name": "NATS_URL", "value": "nats://localhost:4222" },
+        { "name": "JWT_SECRET", "value": "TROQUE-JWT-SECRET" },
+        { "name": "STATS_PORT", "value": ":9091" }
+      ],
+      "dependsOn": [
+        { "containerName": "migrate-stats", "condition": "SUCCESS" },
+        { "containerName": "nats", "condition": "HEALTHY" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "stats"
+        }
+      }
+    },
+    {
+      "name": "gateway",
+      "image": "926705662316.dkr.ecr.us-east-2.amazonaws.com/mpl-gateway:v1",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 80, "protocol": "tcp" }
+      ],
+      "dependsOn": [
+        { "containerName": "books", "condition": "START" },
+        { "containerName": "stats", "condition": "START" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/mpl",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "gateway"
+        }
+      }
+    }
+  ]
+}
